@@ -128,87 +128,6 @@ def predict_future(model, scaler, data, time_step, days_to_predict):
     
     return predictions
 
-# Function to evaluate model accuracy on test data
-def calculate_model_accuracy():
-    """
-    Calculate accuracy metrics based on the test dataset
-    Returns a dictionary of accuracy metrics
-    """
-    try:
-        # Check if model exists
-        if not os.path.exists(MODEL_PATH) or not os.path.exists(SCALER_PATH):
-            return {
-                "success": False,
-                "error": "Model not found. Please train the model first."
-            }
-        
-        # Load the model and scaler
-        model = load_model(MODEL_PATH)
-        scaler = joblib.load(SCALER_PATH)
-        
-        # Load and preprocess data
-        maindf = load_data()
-        closedf = maindf[['Date','Price']]
-        dates = closedf['Date']
-        del closedf['Date']
-        
-        # Scale the data
-        closedf_scaled = scaler.transform(np.array(closedf).reshape(-1,1))
-        
-        # Split into training and testing sets (60% training, 40% testing)
-        training_size = int(len(closedf_scaled)*0.60)
-        test_data = closedf_scaled[training_size:len(closedf_scaled),:1]
-        
-        # Create time series dataset
-        time_step = TIME_STEP
-        _, y_test = create_dataset(test_data, time_step)
-        X_test, _ = create_dataset(test_data, time_step)
-        
-        # Reshape data for LSTM
-        X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
-        
-        # Get predictions on test data
-        test_predict = model.predict(X_test, verbose=0)
-        
-        # Transform back to original form
-        test_predict = scaler.inverse_transform(test_predict)
-        original_ytest = scaler.inverse_transform(y_test.reshape(-1,1))
-        
-        # Calculate accuracy metrics
-        rmse = math.sqrt(mean_squared_error(original_ytest, test_predict))
-        mae = mean_absolute_error(original_ytest, test_predict)
-        r2 = r2_score(original_ytest, test_predict)
-        
-        # Calculate MAPE (Mean Absolute Percentage Error)
-        mape = np.mean(np.abs((original_ytest - test_predict) / original_ytest)) * 100
-        
-        # Calculate prediction accuracy as a percentage (100% - MAPE)
-        accuracy_percentage = max(0, 100 - mape)  # Ensure it doesn't go negative
-        
-        return {
-            "success": True,
-            "metrics": {
-                "rmse": round(rmse, 2),
-                "mae": round(mae, 2),
-                "r2_score": round(r2, 4),
-                "mape": round(mape, 2),
-                "accuracy_percentage": round(accuracy_percentage, 2)
-            },
-            "interpretation": {
-                "rmse": "Root Mean Squared Error (lower is better)",
-                "mae": "Mean Absolute Error (lower is better)",
-                "r2_score": "R² Score (higher is better, max 1.0)",
-                "mape": "Mean Absolute Percentage Error (lower is better)",
-                "accuracy_percentage": "Prediction Accuracy (higher is better)"
-            },
-            "test_size": len(original_ytest)
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
 def train_and_save_model():
     # Load the data
     maindf = load_data()
@@ -344,12 +263,6 @@ def predict_custom(days):
     """Get prediction for a custom timeframe"""
     predictions = make_predictions([days])
     return jsonify(predictions)
-
-@app.route('/accuracy', methods=['GET'])
-def accuracy_api():
-    """Get accuracy metrics for the prediction model based on test data"""
-    accuracy_metrics = calculate_model_accuracy()
-    return jsonify(accuracy_metrics)
 
 # Main execution
 if __name__ == "__main__":

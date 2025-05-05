@@ -143,14 +143,14 @@ Returns prediction for a custom timeframe specified by the number of days.
 #### Example API Call
 
 ```bash
-curl http://localhost:5000/predict/60
+curl http://localhost:5000/predict/30
 ```
 
 #### Example Response
 
 ```json
 {
-  "60_days": {
+  "30_days": {
     "dates": [
       "2023-05-01", "2023-05-02", "...", "2023-06-29"
     ],
@@ -158,43 +158,6 @@ curl http://localhost:5000/predict/60
       67250.85, 67450.32, "...", 70520.45
     ]
   }
-}
-```
-
-### 3. Get Model Accuracy Metrics
-
-```
-GET /accuracy
-```
-
-Returns accuracy metrics for the prediction model based on test data.
-
-#### Example API Call
-
-```bash
-curl http://localhost:5000/accuracy
-```
-
-#### Example Response
-
-```json
-{
-  "success": true,
-  "metrics": {
-    "rmse": 243.56,
-    "mae": 198.72,
-    "r2_score": 0.9823,
-    "mape": 2.35,
-    "accuracy_percentage": 97.65
-  },
-  "interpretation": {
-    "rmse": "Root Mean Squared Error (lower is better)",
-    "mae": "Mean Absolute Error (lower is better)",
-    "r2_score": "R² Score (higher is better, max 1.0)",
-    "mape": "Mean Absolute Percentage Error (lower is better)",
-    "accuracy_percentage": "Prediction Accuracy (higher is better)"
-  },
-  "test_size": 278
 }
 ```
 

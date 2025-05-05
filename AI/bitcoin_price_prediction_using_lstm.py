@@ -308,58 +308,6 @@ def predict_custom(days):
     predictions = make_predictions([days])
     return jsonify(predictions)
 
-@app.route('/accuracy', methods=['GET'])
-def model_accuracy():
-    import joblib
-    
-    # Check if model exists, if not train a new one
-    model_path = 'AI/model/bitcoin_lstm_model.keras'
-    scaler_path = 'AI/model/bitcoin_price_scaler.save'
-    
-    if os.path.exists(model_path) and os.path.exists(scaler_path):
-        model = load_model(model_path)
-        scaler = joblib.load(scaler_path)
-    else:
-        model, scaler, _, _, _, _ = train_and_save_model()
-    
-    # Load the data for evaluation
-    maindf = load_data()
-    closedf = maindf[['Date', 'Price']]
-    del closedf['Date']
-    closedf = scaler.transform(np.array(closedf).reshape(-1, 1))
-    
-    # Split data into train and test sets
-    training_size = int(len(closedf) * 0.60)
-    train_data = closedf[0:training_size, :]
-    test_data = closedf[training_size:len(closedf), :1]
-    
-    # Create datasets for evaluation
-    time_step = 15
-    X_train, y_train = create_dataset(train_data, time_step)
-    X_test, y_test = create_dataset(test_data, time_step)
-    
-    # Reshape data for LSTM
-    X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
-    X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
-    
-    # Evaluate the model
-    train_rmse, train_mae, train_r2 = evaluate_model(model, X_train, y_train, scaler, "Training Data")
-    test_rmse, test_mae, test_r2 = evaluate_model(model, X_test, y_test, scaler, "Testing Data")
-    
-    # Return metrics as JSON
-    return jsonify({
-        'training': {
-            'rmse': round(train_rmse, 2),
-            'mae': round(train_mae, 2),
-            'r2_score': round(train_r2, 4)
-        },
-        'testing': {
-            'rmse': round(test_rmse, 2),
-            'mae': round(test_mae, 2),
-            'r2_score': round(test_r2, 4)
-        }
-    })
-
 # Main execution
 if __name__ == "__main__":
     print("Bitcoin Price Prediction Model")

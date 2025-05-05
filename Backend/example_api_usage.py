@@ -5,7 +5,6 @@ This script demonstrates how to:
 1. Fetch recent Bitcoin price data
 2. Send it to the prediction API
 3. Receive and process the predictions
-4. Check model accuracy metrics
 
 You can use this as a template for your frontend integration.
 """
@@ -19,7 +18,6 @@ from datetime import datetime, timedelta
 
 # API URLs
 API_URL = "http://localhost:5000/api/predict"
-ACCURACY_URL = "http://localhost:5000/accuracy"
 STATUS_URL = "http://localhost:5000/api/status"
 
 # Check if the API is running and model is loaded
@@ -99,61 +97,6 @@ def get_predictions(prices):
         print(f"Error calling prediction API: {e}")
         return None
 
-# Function to get model accuracy metrics
-def get_model_accuracy():
-    """
-    Fetch accuracy metrics from the API to evaluate the model's reliability
-    
-    Returns:
-        Dictionary containing accuracy metrics
-    """
-    try:
-        # Send GET request to accuracy endpoint
-        response = requests.get(ACCURACY_URL)
-        
-        # Check if request was successful
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"API Error: {response.status_code}")
-            print(response.text)
-            return None
-            
-    except Exception as e:
-        print(f"Error calling accuracy API: {e}")
-        return None
-
-# Function to display model accuracy metrics
-def display_accuracy_metrics(accuracy_data):
-    """
-    Display the accuracy metrics in a readable format
-    
-    Args:
-        accuracy_data: Dictionary containing accuracy metrics from the API
-    """
-    if not accuracy_data or not accuracy_data.get('success'):
-        print("Failed to retrieve accuracy metrics")
-        if accuracy_data and 'error' in accuracy_data:
-            print(f"Error: {accuracy_data['error']}")
-        return
-    
-    metrics = accuracy_data['metrics']
-    interpretations = accuracy_data['interpretation']
-    test_size = accuracy_data['test_size']
-    
-    print("\n" + "="*50)
-    print("MODEL ACCURACY METRICS")
-    print("="*50)
-    print(f"Based on {test_size} test samples")
-    print("-"*50)
-    
-    for key, value in metrics.items():
-        print(f"{key.upper()}: {value} - {interpretations[key]}")
-    
-    print("-"*50)
-    print(f"Prediction Accuracy: {metrics['accuracy_percentage']}%")
-    print("="*50)
-
 # Function to visualize predictions
 def plot_predictions(predictions, timeframe='1month'):
     """
@@ -198,18 +141,6 @@ def main():
     if not check_api_status():
         print("API is not ready. Please make sure the server is running and the model is loaded.")
         return
-    
-    # Get model accuracy metrics first
-    print("Fetching model accuracy metrics...")
-    accuracy_data = get_model_accuracy()
-    display_accuracy_metrics(accuracy_data)
-    
-    # Ask user if they want to continue with predictions
-    if accuracy_data and accuracy_data.get('success'):
-        continue_predictions = input("\nDo you want to get price predictions? (y/n): ").lower().strip()
-        if continue_predictions != 'y':
-            print("Exiting without making predictions.")
-            return
     
     # Get recent Bitcoin price data (minimum 15 days required)
     recent_prices = get_recent_bitcoin_data(days=30)
