@@ -1,95 +1,119 @@
 # Bitcoin Price Prediction Project
 
-This project provides Bitcoin price predictions for various timeframes using LSTM (Long Short-Term Memory) neural networks. The API allows users to get Bitcoin price predictions for different time frames and returns data formatted for easy integration with frontend applications.
+A comprehensive application for predicting Bitcoin prices using LSTM (Long Short-Term Memory) neural networks with a professional dark-themed frontend visualization. This project combines machine learning with a responsive web interface to provide Bitcoin price predictions for various timeframes.
+
+## Project Overview
+
+This application consists of:
+1. A backend LSTM model for Bitcoin price prediction
+2. A Flask API to serve predictions
+3. A React frontend with interactive charts for data visualization
 
 ## Project Structure
 
 ```
 hackthon_hnt_team/
 ├── AI/
-│   ├── bitcoin_price_prediction_using_lstm.py  # Enhanced LSTM model with 60/40 train/test split
+│   ├── bitcoin_price_prediction_using_lstm.py  # LSTM model training script
 │   └── model/                                 # Trained LSTM model files
 │       ├── bitcoin_lstm_model.keras
 │       ├── bitcoin_price_scaler.save
 │       ├── loss_curves.png
 │       └── actual_vs_predicted.png
 ├── Backend/
-│   ├── bitcoin_price_prediction_api.py        # API for Bitcoin price predictions
-│   └── example_api_usage.py                   # Example of how to use the API
+│   └── api_server.py                          # API server for predictions
 ├── Data/
 │   └── Bitcoin Historical Data.csv            # Historical Bitcoin price data
-├── Frontend/                                  # Frontend code for the application
+├── Frontend/                                  # React frontend application
 └── README.md                                  # This file
 ```
 
 ## Features
 
-- Bitcoin price prediction for:
+### Backend (AI)
+- Bitcoin price prediction for multiple timeframes:
   - 1 month (30 days)
   - 6 months (180 days)
   - 1 year (365 days)
   - 3 years (1095 days)
-- Machine learning model with 60% training data and 40% testing data
+- LSTM model with 60% training data and 40% testing data
 - Accuracy evaluation metrics (RMSE, MAE, R² score)
 - REST API for retrieving predictions
-- Example code for integrating with the API
 
-## System Overview
+### Frontend
+- Interactive price prediction chart using ECharts
+- Time-frame selection between 1 month, 6 months, 1 year, and 3 years
+- Real-time data fetching from the Flask API
+- Responsive design for desktop, tablet, and mobile
+- Dark mode UI with Bitcoin-themed styling
+- Fallback mechanism when API is unavailable
 
-1. **LSTM Model Training** (`bitcoin_price_prediction_using_lstm.py`): 
-   - Processes historical Bitcoin price data
-   - Trains an LSTM model
-   - Saves the trained model and scaler for future use
+## Tech Stack
 
-2. **Prediction API** (`bitcoin_price_prediction_api.py`):
-   - Loads the saved model
-   - Provides endpoints for making predictions
-   - Returns data formatted for visualization
+### Backend
+- Python 3.8+ (recommended: 3.11 or lower)
+- TensorFlow 2.x for LSTM model
+- Flask for API server
+- NumPy, pandas for data manipulation
+- scikit-learn for model evaluation
+- joblib for model persistence
 
-3. **API Usage Example** (`example_api_usage.py`):
-   - Demonstrates how to call the API
-   - Shows how to process the returned data
+### Frontend
+- React with TypeScript
+- ECharts for data visualization
+- Styled Components for styling
+- Axios for API requests
 
 ## Getting Started
 
 ### Prerequisites
 
-- Python 3.8+ (recommended: 3.11 or lower)
-- Required Python packages:
-  - TensorFlow 2.x
-  - Flask
-  - NumPy
-  - pandas
-  - scikit-learn
-  - joblib
-  - matplotlib
-  - requests
+1. Python 3.8+ (recommended: 3.11 or lower)
+2. Node.js and npm
+3. Git
 
 ### Installation
 
+#### Clone the Repository
+```bash
+git clone <repository-url>
+cd hackthon_hnt_team
+```
+
+#### Backend Setup
+1. Install Python dependencies:
 ```bash
 pip install tensorflow numpy pandas scikit-learn joblib flask matplotlib requests
 ```
 
-### Training the Model
-
+2. Train the model (optional - pre-trained model included):
 ```bash
 cd AI
 python bitcoin_price_prediction_using_lstm.py
 ```
+This will automatically train the model with all historical data.
 
-When prompted, select option 1 to train a new model with all historical data.
-
-### Running the API Server
-
+3. Start the API server:
 ```bash
 cd Backend
-python bitcoin_price_prediction_api.py
+python api_server.py
+```
+The API server will run at http://localhost:5000
+
+#### Frontend Setup
+1. Install Node.js dependencies:
+```bash
+cd Frontend
+npm install
 ```
 
-When prompted, select option 3 to start the API server.
+2. Start the development server:
+```bash
+npm start
+```
+The frontend will be available at http://localhost:3000
 
-## API Endpoints
+## API Documentation
 
 ### 1. Get Predictions for Standard Timeframes
 
@@ -175,38 +199,43 @@ The model is evaluated using:
 - Root Mean Squared Error (RMSE)
 - Mean Absolute Error (MAE)
 - R² Score (coefficient of determination)
-- Mean Absolute Percentage Error (MAPE)
-- Prediction Accuracy Percentage
+- Visualization of model performance is saved in `AI/model/` directory
 
-Visualization of model performance is saved in `AI/model/` directory.
-
-## Frontend Integration
-
-The API responses are designed to be easily integrated with frontend visualization libraries like echarts. The prediction data includes dates and corresponding predicted prices that can be directly used in chart components.
-
-Example of using the API with JavaScript:
+## Frontend Integration Example
 
 ```javascript
-// Example of fetching predictions
-async function fetchPredictions() {
+// Example of fetching predictions with JavaScript
+async function fetchPredictions(days = 30) {
   try {
-    const response = await fetch('http://localhost:5000/predict');
+    const response = await fetch(`http://localhost:5000/predict/${days}`);
     const data = await response.json();
-    
-    // Process the 30-day prediction data
-    const thirtyDayPrediction = data['30_days'];
-    const dates = thirtyDayPrediction.dates;
-    const prices = thirtyDayPrediction.predicted_prices;
-    
+
+    // Process the prediction data
+    const prediction = data[`${days}_days`];
+    const dates = prediction.dates;
+    const prices = prediction.predicted_prices;
+
     // Now you can use this data with your favorite charting library
     console.log(`First prediction: ${dates[0]} - $${prices[0]}`);
-    
-    return data;
+
+    return prediction;
   } catch (error) {
     console.error('Error fetching predictions:', error);
   }
 }
 ```
+
+## Troubleshooting
+
+### API Connection Issues
+- Ensure the Flask API is running at http://localhost:5000
+- Check for CORS issues if accessing from a different domain
+- Verify that the correct endpoint is being called (/predict or /predict/<days>)
+
+### Model Training Issues
+- Ensure you have sufficient historical data in the Data directory
+- Check that TensorFlow is properly installed and compatible with your system
+- For GPU acceleration, ensure CUDA and cuDNN are properly configured
 
 ## License
 
@@ -214,4 +243,4 @@ This project is for hackathon purposes only.
 
 ## Authors
 
-HNT Team 
+HNT Team

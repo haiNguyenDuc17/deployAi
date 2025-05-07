@@ -1,9 +1,3 @@
-# -*- coding: utf-8 -*-
-"""📊Bitcoin Price Prediction📈  using LSTM
-
-Modified to work with custom Bitcoin Historical Data format and provide multi-timeframe predictions
-"""
-
 # First we will import the necessary Library
 
 import os
@@ -12,7 +6,6 @@ import numpy as np
 import math
 import datetime as dt
 import matplotlib.pyplot as plt
-from flask import Flask, jsonify
 
 # For Evalution we will use these library
 
@@ -75,10 +68,10 @@ def load_data():
 
     # Since the data is in reverse chronological order (newest first), sort it chronologically
     maindf = maindf.sort_values('Date')
-    
+
     print('Total number of days present in the dataset: ', maindf.shape[0])
     print('Total number of fields present in the dataset: ', maindf.shape[1])
-    
+
     return maindf
 
 # Function to create dataset for LSTM
@@ -101,9 +94,9 @@ def build_model(X_train, y_train, X_test, y_test):
     model.add(Dense(1))
     model.compile(loss="mean_squared_error", optimizer="adam")
 
-    history = model.fit(X_train, y_train, validation_data=(X_test, y_test), 
+    history = model.fit(X_train, y_train, validation_data=(X_test, y_test),
                         epochs=200, batch_size=32, verbose=1)
-    
+
     return model, history
 
 # Function to make predictions for different time frames
@@ -115,7 +108,7 @@ def predict_future(model, scaler, data, time_step, days_to_predict):
     lst_output = []
     n_steps = time_step
     i = 0
-    
+
     while i < days_to_predict:
         if len(temp_input) > time_step:
             x_input = np.array(temp_input[1:])
@@ -135,108 +128,108 @@ def predict_future(model, scaler, data, time_step, days_to_predict):
 
             lst_output.extend(yhat.tolist())
             i += 1
-    
+
     # Transform the predictions back to original scale
     predictions = scaler.inverse_transform(np.array(lst_output).reshape(-1,1)).reshape(1,-1).tolist()[0]
-    
+
     return predictions
 
 def evaluate_model(model, X, y, scaler, name=""):
     """Evaluate model performance with various metrics"""
     predictions = model.predict(X)
-    
+
     # Transform back to original form
     predictions = scaler.inverse_transform(predictions)
     original_y = scaler.inverse_transform(y.reshape(-1,1))
-    
+
     # Calculate various metrics
     rmse = math.sqrt(mean_squared_error(original_y, predictions))
     mae = mean_absolute_error(original_y, predictions)
     r2 = r2_score(original_y, predictions)
-    
+
     print(f"\n{name} Evaluation Metrics:")
     print(f"RMSE: {rmse:.2f}")
     print(f"MAE: {mae:.2f}")
     print(f"R2 Score: {r2:.4f}")
-    
+
     return rmse, mae, r2
 
 def train_and_save_model():
     # Load the data
     maindf = load_data()
-    
+
     # Extract price data
     closedf = maindf[['Date','Price']]
     print("Shape of price dataframe:", closedf.shape)
-    
+
     # Create a copy for visualization
     close_stock = closedf.copy()
-    
+
     # Deleting date column and normalizing using MinMax Scaler
     dates = closedf['Date']  # Save dates for later reference
     del closedf['Date']
     scaler = MinMaxScaler(feature_range=(0,1))
     closedf = scaler.fit_transform(np.array(closedf).reshape(-1,1))
-    
+
     # Split into training and testing sets (60% training, 40% testing)
     training_size = int(len(closedf)*0.60)
     test_size = len(closedf)-training_size
     train_data, test_data = closedf[0:training_size,:], closedf[training_size:len(closedf),:1]
     print("train_data: ", train_data.shape)
     print("test_data: ", test_data.shape)
-    
+
     # Create time series dataset with 15-day lookback
     time_step = 15
     X_train, y_train = create_dataset(train_data, time_step)
     X_test, y_test = create_dataset(test_data, time_step)
-    
+
     # Reshape data for LSTM
     X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
     X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
-    
+
     # Build and train the model
     model, history = build_model(X_train, y_train, X_test, y_test)
-    
+
     # Save the model and scaler
     model_dir = 'AI/model'
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-    
+
     model_save_path = os.path.join(model_dir, 'bitcoin_lstm_model.keras')
     model.save(model_save_path)
     print(f"Model saved to {model_save_path}")
-    
+
     import joblib
     scaler_save_path = os.path.join(model_dir, 'bitcoin_price_scaler.save')
     joblib.dump(scaler, scaler_save_path)
     print(f"Scaler saved to {scaler_save_path}")
-    
+
     # Plot loss curves
     loss = history.history['loss']
     val_loss = history.history['val_loss']
     epochs = range(len(loss))
-    
+
     plt.figure(figsize=(10, 6))
     plt.plot(epochs, loss, 'r', label='Training loss')
     plt.plot(epochs, val_loss, 'b', label='Validation loss')
     plt.title('Training and validation loss')
     plt.legend(loc=0)
     plt.savefig(os.path.join(model_dir, 'loss_curves.png'))
-    
+
     # Evaluate the model on both training and test data
     train_rmse, train_mae, train_r2 = evaluate_model(model, X_train, y_train, scaler, "Training Data")
     test_rmse, test_mae, test_r2 = evaluate_model(model, X_test, y_test, scaler, "Testing Data")
-    
+
     # Visualize actual vs predicted values on test data
     test_predict = model.predict(X_test)
     test_predict = scaler.inverse_transform(test_predict)
-    
+
     # Create a DataFrame for visualization
     actual_vs_pred = pd.DataFrame({
         'Actual': scaler.inverse_transform(y_test.reshape(-1,1)).flatten(),
         'Predicted': test_predict.flatten()
     })
-    
+
     # Plot actual vs predicted values
     plt.figure(figsize=(12, 6))
     plt.plot(actual_vs_pred['Actual'], label='Actual Prices')
@@ -247,7 +240,7 @@ def train_and_save_model():
     plt.legend()
     plt.grid(True)
     plt.savefig(os.path.join(model_dir, 'actual_vs_predicted.png'))
-    
+
     return model, scaler, test_data, time_step, closedf, dates
 
 def make_predictions(timeframes=[30, 180, 365, 1095]):
@@ -256,16 +249,16 @@ def make_predictions(timeframes=[30, 180, 365, 1095]):
     timeframes: list of days to predict [1 month, 6 months, 1 year, 3 years]
     """
     import joblib
-    
+
     # Check if model exists, if not train a new one
     model_path = 'AI/model/bitcoin_lstm_model.keras'
     scaler_path = 'AI/model/bitcoin_price_scaler.save'
-    
+
     if os.path.exists(model_path) and os.path.exists(scaler_path):
         print("Loading existing model and scaler...")
         model = load_model(model_path)
         scaler = joblib.load(scaler_path)
-        
+
         # Load the latest data
         maindf = load_data()
         closedf = maindf[['Date','Price']]
@@ -276,63 +269,42 @@ def make_predictions(timeframes=[30, 180, 365, 1095]):
     else:
         print("No model found. Training new model...")
         model, scaler, _, time_step, closedf, dates = train_and_save_model()
-    
+
     # Make predictions for each timeframe
     predictions = {}
     for days in timeframes:
         print(f"Predicting for next {days} days...")
         preds = predict_future(model, scaler, closedf, time_step, days)
-        
+
         # Create dates for predictions
         last_date = dates.iloc[-1]
         future_dates = [(last_date + pd.Timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(len(preds))]
-        
+
         # Store predictions with dates
         predictions[f"{days}_days"] = {
             "dates": future_dates,
             "predicted_prices": [round(price, 2) for price in preds]
         }
-    
+
     return predictions
-
-# Create Flask API
-app = Flask(__name__)
-
-@app.route('/predict', methods=['GET'])
-def predict_api():
-    predictions = make_predictions()
-    return jsonify(predictions)
-
-@app.route('/predict/<int:days>', methods=['GET'])
-def predict_custom(days):
-    predictions = make_predictions([days])
-    return jsonify(predictions)
 
 # Main execution
 if __name__ == "__main__":
     print("Bitcoin Price Prediction Model")
-    print("1. Train new model with all historical data")
-    print("2. Make predictions using existing model")
-    print("3. Start API server")
-    
-    choice = input("Enter your choice (1-3): ")
-    
-    if choice == '1':
-        train_and_save_model()
-    elif choice == '2':
-        timeframes = [30, 180, 365, 1095]  # 1 month, 6 months, 1 year, 3 years
-        predictions = make_predictions(timeframes)
-        
-        # Print predictions
-        for timeframe, data in predictions.items():
-            print(f"\nPredictions for next {timeframe}:")
-            for i, (date, price) in enumerate(zip(data['dates'], data['predicted_prices'])):
-                if i < 5 or i > len(data['dates']) - 6:  # Show first and last 5 predictions
-                    print(f"{date}: ${price}")
-                elif i == 5:
-                    print("...")
-    elif choice == '3':
-        print("Starting API server...")
-        app.run(host='0.0.0.0', port=5000)
-    else:
-        print("Invalid choice")
+    print("Training new model with all historical data...")
+
+    # Train the model by default
+    model, scaler, test_data, time_step, closedf, dates = train_and_save_model()
+
+    # Make predictions for different timeframes
+    timeframes = [30, 180, 365, 1095]  # 1 month, 6 months, 1 year, 3 years
+    predictions = make_predictions(timeframes)
+
+    # Print predictions
+    for timeframe, data in predictions.items():
+        print(f"\nPredictions for next {timeframe}:")
+        for i, (date, price) in enumerate(zip(data['dates'], data['predicted_prices'])):
+            if i < 5 or i > len(data['dates']) - 6:  # Show first and last 5 predictions
+                print(f"{date}: ${price}")
+            elif i == 5:
+                print("...")
