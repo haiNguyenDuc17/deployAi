@@ -39,7 +39,9 @@ def process_volume(vol_str):
 # Function to load and preprocess data
 def load_data():
     # Load our dataset
-    maindf = pd.read_csv('../Data/Bitcoin Historical Data.csv')
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_path = os.path.join(base_dir, 'Data', 'Bitcoin Historical Data.csv')
+    maindf = pd.read_csv(data_path)
 
     # Clean numeric columns - they have commas and quotes
     numeric_columns = ['Price', 'Open', 'High', 'Low']
@@ -110,8 +112,9 @@ def make_predictions(timeframes=[30, 180, 365, 1095]):
     timeframes: list of days to predict [1 month, 6 months, 1 year, 3 years]
     """
     # Check if model exists, if not train a new one
-    model_path = os.path.join('..', 'AI', 'model', 'bitcoin_lstm_model.keras')
-    scaler_path = os.path.join('..', 'AI', 'model', 'bitcoin_price_scaler.save')
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    model_path = os.path.join(base_dir, 'AI', 'model', 'bitcoin_lstm_model.keras')
+    scaler_path = os.path.join(base_dir, 'AI', 'model', 'bitcoin_price_scaler.save')
     
     print(f"Current working directory: {os.getcwd()}")
     print(f"Model path absolute: {os.path.abspath(model_path)}")
