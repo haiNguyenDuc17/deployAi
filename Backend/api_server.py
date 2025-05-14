@@ -3,13 +3,154 @@ import os
 import sys
 import pandas as pd
 import numpy as np
+import math
+import datetime as dt
+import tensorflow as tf
+from tensorflow.keras.models import Sequential, load_model
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+import joblib
 
-# Add the parent directory to sys.path to import from the bitcoin_price_prediction_using_lstm module
+# Add the parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from AI.bitcoin_price_prediction_using_lstm import make_predictions
 
 # Create Flask API
 app = Flask(__name__)
+
+# Function to clean up the price values (remove commas and quotes)
+def clean_price(price_str):
+    if isinstance(price_str, str):
+        return float(price_str.replace('"', '').replace(',', ''))
+    return price_str
+
+# Function to process volume data with K, M, B suffixes
+def process_volume(vol_str):
+    if isinstance(vol_str, str):
+        if 'K' in vol_str:
+            return float(vol_str.replace('K', '')) * 1000
+        elif 'M' in vol_str:
+            return float(vol_str.replace('M', '')) * 1000000
+        elif 'B' in vol_str:
+            return float(vol_str.replace('B', '')) * 1000000000
+        else:
+            return float(vol_str)
+    return vol_str
+
+# Function to load and preprocess data
+def load_data():
+    # Load our dataset
+    maindf = pd.read_csv('../Data/Bitcoin Historical Data.csv')
+
+    # Clean numeric columns - they have commas and quotes
+    numeric_columns = ['Price', 'Open', 'High', 'Low']
+    for col in numeric_columns:
+        maindf[col] = maindf[col].apply(clean_price)
+
+    # Handle the 'Vol.' column
+    maindf['Volume'] = maindf['Vol.'].apply(process_volume)
+
+    # Convert Date to datetime
+    maindf['Date'] = pd.to_datetime(maindf['Date'], format='%m/%d/%Y')
+
+    # Since the data is in reverse chronological order (newest first), sort it chronologically
+    maindf = maindf.sort_values('Date')
+
+    print('Total number of days present in the dataset: ', maindf.shape[0])
+    print('Total number of fields present in the dataset: ', maindf.shape[1])
+
+    return maindf
+
+# Function to create dataset for LSTM
+def create_dataset(dataset, time_step=1):
+    dataX, dataY = [], []
+    for i in range(len(dataset)-time_step-1):
+        a = dataset[i:(i+time_step), 0]
+        dataX.append(a)
+        dataY.append(dataset[i + time_step, 0])
+    return np.array(dataX), np.array(dataY)
+
+# Function to predict future values
+def predict_future(model, scaler, data, time_step, days_to_predict):
+    x_input = data[len(data)-time_step:].reshape(1,-1)
+    temp_input = list(x_input)
+    temp_input = temp_input[0].tolist()
+
+    lst_output = []
+    n_steps = time_step
+    i = 0
+
+    while i < days_to_predict:
+        if len(temp_input) > time_step:
+            x_input = np.array(temp_input[1:])
+            x_input = x_input.reshape(1,-1)
+            x_input = x_input.reshape((1, n_steps, 1))
+
+            yhat = model.predict(x_input, verbose=0)
+            temp_input.extend(yhat[0].tolist())
+            temp_input = temp_input[1:]
+
+            lst_output.extend(yhat.tolist())
+            i += 1
+        else:
+            x_input = x_input.reshape((1, n_steps, 1))
+            yhat = model.predict(x_input, verbose=0)
+            temp_input.extend(yhat[0].tolist())
+
+            lst_output.extend(yhat.tolist())
+            i += 1
+
+    # Transform the predictions back to original scale
+    predictions = scaler.inverse_transform(np.array(lst_output).reshape(-1,1)).reshape(1,-1).tolist()[0]
+
+    return predictions
+
+def make_predictions(timeframes=[30, 180, 365, 1095]):
+    """
+    Make predictions for different timeframes
+    timeframes: list of days to predict [1 month, 6 months, 1 year, 3 years]
+    """
+    # Check if model exists, if not train a new one
+    model_path = os.path.join('..', 'AI', 'model', 'bitcoin_lstm_model.keras')
+    scaler_path = os.path.join('..', 'AI', 'model', 'bitcoin_price_scaler.save')
+    
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Model path absolute: {os.path.abspath(model_path)}")
+    print(f"Model path exists: {os.path.exists(model_path)}")
+    print(f"Scaler path exists: {os.path.exists(scaler_path)}")
+    
+    if os.path.exists(model_path) and os.path.exists(scaler_path):
+        print("Loading existing model and scaler...")
+        model = load_model(model_path)
+        scaler = joblib.load(scaler_path)
+
+        # Load the latest data
+        maindf = load_data()
+        closedf = maindf[['Date','Price']]
+        dates = closedf['Date']
+        del closedf['Date']
+        closedf = scaler.transform(np.array(closedf).reshape(-1,1))
+        time_step = 15
+    else:
+        print("No model found. Cannot make predictions.")
+        return {"error": "Model not found"}
+
+    # Make predictions for each timeframe
+    predictions = {}
+    for days in timeframes:
+        print(f"Predicting for next {days} days...")
+        preds = predict_future(model, scaler, closedf, time_step, days)
+
+        # Create dates for predictions
+        last_date = dates.iloc[-1]
+        future_dates = [(last_date + pd.Timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(len(preds))]
+
+        # Store predictions with dates
+        predictions[f"{days}_days"] = {
+            "dates": future_dates,
+            "predicted_prices": [round(price, 2) for price in preds]
+        }
+
+    return predictions
 
 @app.route('/predict', methods=['GET'])
 def predict_api():

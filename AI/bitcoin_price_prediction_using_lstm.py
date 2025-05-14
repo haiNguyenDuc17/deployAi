@@ -99,41 +99,6 @@ def build_model(X_train, y_train, X_test, y_test):
 
     return model, history
 
-# Function to make predictions for different time frames
-def predict_future(model, scaler, data, time_step, days_to_predict):
-    x_input = data[len(data)-time_step:].reshape(1,-1)
-    temp_input = list(x_input)
-    temp_input = temp_input[0].tolist()
-
-    lst_output = []
-    n_steps = time_step
-    i = 0
-
-    while i < days_to_predict:
-        if len(temp_input) > time_step:
-            x_input = np.array(temp_input[1:])
-            x_input = x_input.reshape(1,-1)
-            x_input = x_input.reshape((1, n_steps, 1))
-
-            yhat = model.predict(x_input, verbose=0)
-            temp_input.extend(yhat[0].tolist())
-            temp_input = temp_input[1:]
-
-            lst_output.extend(yhat.tolist())
-            i += 1
-        else:
-            x_input = x_input.reshape((1, n_steps, 1))
-            yhat = model.predict(x_input, verbose=0)
-            temp_input.extend(yhat[0].tolist())
-
-            lst_output.extend(yhat.tolist())
-            i += 1
-
-    # Transform the predictions back to original scale
-    predictions = scaler.inverse_transform(np.array(lst_output).reshape(-1,1)).reshape(1,-1).tolist()[0]
-
-    return predictions
-
 def evaluate_model(model, X, y, scaler, name=""):
     """Evaluate model performance with various metrics"""
     predictions = model.predict(X)
@@ -243,68 +208,10 @@ def train_and_save_model():
 
     return model, scaler, test_data, time_step, closedf, dates
 
-def make_predictions(timeframes=[30, 180, 365, 1095]):
-    """
-    Make predictions for different timeframes
-    timeframes: list of days to predict [1 month, 6 months, 1 year, 3 years]
-    """
-    import joblib
-
-    # Check if model exists, if not train a new one
-    model_path = 'AI/model/bitcoin_lstm_model.keras'
-    scaler_path = 'AI/model/bitcoin_price_scaler.save'
-
-    if os.path.exists(model_path) and os.path.exists(scaler_path):
-        print("Loading existing model and scaler...")
-        model = load_model(model_path)
-        scaler = joblib.load(scaler_path)
-
-        # Load the latest data
-        maindf = load_data()
-        closedf = maindf[['Date','Price']]
-        dates = closedf['Date']
-        del closedf['Date']
-        closedf = scaler.transform(np.array(closedf).reshape(-1,1))
-        time_step = 15
-    else:
-        print("No model found. Training new model...")
-        model, scaler, _, time_step, closedf, dates = train_and_save_model()
-
-    # Make predictions for each timeframe
-    predictions = {}
-    for days in timeframes:
-        print(f"Predicting for next {days} days...")
-        preds = predict_future(model, scaler, closedf, time_step, days)
-
-        # Create dates for predictions
-        last_date = dates.iloc[-1]
-        future_dates = [(last_date + pd.Timedelta(days=i+1)).strftime('%Y-%m-%d') for i in range(len(preds))]
-
-        # Store predictions with dates
-        predictions[f"{days}_days"] = {
-            "dates": future_dates,
-            "predicted_prices": [round(price, 2) for price in preds]
-        }
-
-    return predictions
-
 # Main execution
 if __name__ == "__main__":
     print("Bitcoin Price Prediction Model")
     print("Training new model with all historical data...")
 
-    # Train the model by default
-    model, scaler, test_data, time_step, closedf, dates = train_and_save_model()
-
-    # Make predictions for different timeframes
-    timeframes = [30, 180, 365, 1095]  # 1 month, 6 months, 1 year, 3 years
-    predictions = make_predictions(timeframes)
-
-    # Print predictions
-    for timeframe, data in predictions.items():
-        print(f"\nPredictions for next {timeframe}:")
-        for i, (date, price) in enumerate(zip(data['dates'], data['predicted_prices'])):
-            if i < 5 or i > len(data['dates']) - 6:  # Show first and last 5 predictions
-                print(f"{date}: ${price}")
-            elif i == 5:
-                print("...")
+    # Train the model
+    train_and_save_model()
