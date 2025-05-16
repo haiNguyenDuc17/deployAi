@@ -122,6 +122,17 @@ const BitcoinPriceChart: React.FC = () => {
             return '$' + value.toLocaleString();
           },
         },
+        scale: true,
+        min: (value: { min: number }) => {
+          // Set min to ~20% below the minimum value
+          return Math.floor(value.min * 0.8);
+        },
+        max: (value: { max: number }) => {
+          // Set max to ~20% above the maximum value
+          return Math.ceil(value.max * 1.2);
+        },
+        splitNumber: 20,
+        minInterval: 500
       },
       series: [
         {
@@ -225,50 +236,48 @@ const BitcoinPriceChart: React.FC = () => {
       <ChartHeader>
         <ChartTitle>Bitcoin Price Prediction</ChartTitle>
         <TimeFrameSelector>
-          <TimeFrameButton
-            active={selectedTimeFrame === '1m'}
+          <TimeFrameButton 
+            active={selectedTimeFrame === '1m'} 
             onClick={() => handleTimeFrameChange('1m')}
           >
-            1 M
+            1M
           </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === '6m'}
+          <TimeFrameButton 
+            active={selectedTimeFrame === '6m'} 
             onClick={() => handleTimeFrameChange('6m')}
           >
-            6 M
+            6M
           </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === '1y'}
+          <TimeFrameButton 
+            active={selectedTimeFrame === '1y'} 
             onClick={() => handleTimeFrameChange('1y')}
           >
-            1 Y
+            1Y
           </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === '3y'}
+          <TimeFrameButton 
+            active={selectedTimeFrame === '3y'} 
             onClick={() => handleTimeFrameChange('3y')}
           >
-            3 Y
+            3Y
           </TimeFrameButton>
         </TimeFrameSelector>
       </ChartHeader>
-
+      
       {loading ? (
         <LoadingSpinner />
       ) : error ? (
         renderErrorMessage()
       ) : (
-        <ReactECharts
-          option={getOption()}
-          style={{ height: '400px', width: '100%' }}
+        <ReactECharts 
+          option={getOption()} 
+          style={{ height: '600px' }}
           opts={{ renderer: 'canvas' }}
           notMerge={true}
           lazyUpdate={true}
         />
       )}
-
       <Disclaimer>
-        Disclaimer: The information on this site is for reference only and does not constitute financial advice. 
-        We accept no liability for investment decisions made based on these predictions.
+        * This is a prediction model and should not be used as financial advice.
       </Disclaimer>
     </ChartContainer>
   );

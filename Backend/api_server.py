@@ -72,32 +72,51 @@ def create_dataset(dataset, time_step=1):
     return np.array(dataX), np.array(dataY)
 
 # Function to predict future values
-def predict_future(model, scaler, data, time_step, days_to_predict):
-    x_input = data[len(data)-time_step:].reshape(1,-1)
+def predict_future(model, scaler, data, window_size, days_to_predict):
+    x_input = data[len(data)-window_size:].reshape(1,-1)
     temp_input = list(x_input)
     temp_input = temp_input[0].tolist()
 
+    # Calculate historical volatility from the original data
+    historical_data = scaler.inverse_transform(data[-30:])  # Use last 30 days for volatility calculation
+    daily_returns = np.diff(historical_data.flatten()) / historical_data[:-1].flatten()
+    historical_volatility = np.std(daily_returns)
+    
+    # Use historical volatility as the baseline for simulation
+    # Scale factor can be adjusted based on desired volatility level
+    volatility_scale = 0.7  # Adjust this value to control volatility intensity
+
     lst_output = []
-    n_steps = time_step
+    n_steps = window_size
     i = 0
 
     while i < days_to_predict:
-        if len(temp_input) > time_step:
+        if len(temp_input) > window_size:
             x_input = np.array(temp_input[1:])
             x_input = x_input.reshape(1,-1)
             x_input = x_input.reshape((1, n_steps, 1))
 
             yhat = model.predict(x_input, verbose=0)
+            
+            # Add realistic market volatility based on historical patterns
+            pred_value = yhat[0][0]
+            scaled_value = pred_value
+            noise = np.random.normal(0, historical_volatility * volatility_scale * abs(scaled_value), 1)[0]
+            yhat[0][0] = scaled_value + noise
+            
             temp_input.extend(yhat[0].tolist())
             temp_input = temp_input[1:]
 
             lst_output.extend(yhat.tolist())
             i += 1
         else:
-            x_input = x_input.reshape((1, n_steps, 1))
+            x_input = np.array(temp_input).reshape((1, n_steps, 1))
             yhat = model.predict(x_input, verbose=0)
+            pred_value = yhat[0][0]
+            scaled_value = pred_value
+            noise = np.random.normal(0, historical_volatility * volatility_scale * abs(scaled_value), 1)[0]
+            yhat[0][0] = scaled_value + noise
             temp_input.extend(yhat[0].tolist())
-
             lst_output.extend(yhat.tolist())
             i += 1
 
@@ -128,11 +147,15 @@ def make_predictions(timeframes=[30, 180, 365, 1095]):
 
         # Load the latest data
         maindf = load_data()
-        closedf = maindf[['Date','Price']]
+        closedf = maindf[['Date','Price']].copy()
+        closedf['Date'] = pd.to_datetime(closedf['Date'])
+        closedf = closedf.sort_values(by='Date', ascending=True).reset_index(drop=True)
+        closedf['Price'] = closedf['Price'].astype('float64')
         dates = closedf['Date']
-        del closedf['Date']
-        closedf = scaler.transform(np.array(closedf).reshape(-1,1))
-        time_step = 15
+        price = closedf['Price']
+        window_size = 60
+        # Prepare the input for prediction: last window_size days
+        data = scaler.transform(price.values.reshape(-1,1))
     else:
         print("No model found. Cannot make predictions.")
         return {"error": "Model not found"}
@@ -141,7 +164,7 @@ def make_predictions(timeframes=[30, 180, 365, 1095]):
     predictions = {}
     for days in timeframes:
         print(f"Predicting for next {days} days...")
-        preds = predict_future(model, scaler, closedf, time_step, days)
+        preds = predict_future(model, scaler, data, window_size, days)
 
         # Create dates for predictions
         last_date = dates.iloc[-1]

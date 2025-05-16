@@ -123,47 +123,80 @@ def train_and_save_model():
     # Load the data
     maindf = load_data()
 
-    # Extract price data
-    closedf = maindf[['Date','Price']]
-    print("Shape of price dataframe:", closedf.shape)
+    # Prepare DataFrame similar to gold LSTM code
+    closedf = maindf[['Date', 'Price']].copy()
+    closedf['Date'] = pd.to_datetime(closedf['Date'])
+    closedf = closedf.sort_values(by='Date', ascending=True).reset_index(drop=True)
+    closedf['Price'] = closedf['Price'].astype('float64')
+    dates = closedf['Date']
 
-    # Create a copy for visualization
-    close_stock = closedf.copy()
+    # Test set: last year
+    test_year = closedf['Date'].dt.year.max() - 1
+    test_size = closedf[closedf['Date'].dt.year == test_year].shape[0]
+    
+    # Prepare train/test split
+    price = closedf['Price']
+    scaler = MinMaxScaler()
+    scaler.fit(price.values.reshape(-1,1))
+    window_size = 60
 
-    # Deleting date column and normalizing using MinMax Scaler
-    dates = closedf['Date']  # Save dates for later reference
-    del closedf['Date']
-    scaler = MinMaxScaler(feature_range=(0,1))
-    closedf = scaler.fit_transform(np.array(closedf).reshape(-1,1))
+    # Training data
+    train_data = price[:-test_size]
+    train_data = scaler.transform(train_data.values.reshape(-1,1))
+    X_train, y_train = [], []
+    for i in range(window_size, len(train_data)):
+        X_train.append(train_data[i-window_size:i, 0])
+        y_train.append(train_data[i, 0])
 
-    # Split into training and testing sets (60% training, 40% testing)
-    training_size = int(len(closedf)*0.60)
-    test_size = len(closedf)-training_size
-    train_data, test_data = closedf[0:training_size,:], closedf[training_size:len(closedf),:1]
-    print("train_data: ", train_data.shape)
-    print("test_data: ", test_data.shape)
+    # Test data
+    test_data = price[-test_size-window_size:]
+    test_data = scaler.transform(test_data.values.reshape(-1,1))
+    X_test, y_test = [], []
+    for i in range(window_size, len(test_data)):
+        X_test.append(test_data[i-window_size:i, 0])
+        y_test.append(test_data[i, 0])
 
-    # Create time series dataset with 15-day lookback
-    time_step = 15
-    X_train, y_train = create_dataset(train_data, time_step)
-    X_test, y_test = create_dataset(test_data, time_step)
+    # Convert to numpy arrays and reshape
+    X_train = np.array(X_train)
+    X_test = np.array(X_test)
+    y_train = np.array(y_train)
+    y_test = np.array(y_test)
+    X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+    X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
+    y_train = np.reshape(y_train, (-1,1))
+    y_test = np.reshape(y_test, (-1,1))
 
-    # Reshape data for LSTM
-    X_train = X_train.reshape(X_train.shape[0], X_train.shape[1], 1)
-    X_test = X_test.reshape(X_test.shape[0], X_test.shape[1], 1)
+    print('X_train Shape: ', X_train.shape)
+    print('y_train Shape: ', y_train.shape)
+    print('X_test Shape:  ', X_test.shape)
+    print('y_test Shape:  ', y_test.shape)
 
-    # Build and train the model
-    model, history = build_model(X_train, y_train, X_test, y_test)
+    # Gold LSTM model architecture
+    from keras import Model
+    from keras.layers import Input, Dense, Dropout, LSTM
+    input1 = Input(shape=(window_size,1))
+    x = LSTM(units = 64, return_sequences=True)(input1)
+    x = Dropout(0.2)(x)
+    x = LSTM(units = 64, return_sequences=True)(x)
+    x = Dropout(0.2)(x)
+    x = LSTM(units = 64)(x)
+    x = Dropout(0.2)(x)
+    x = Dense(32, activation='softmax')(x)
+    dnn_output = Dense(1)(x)
+    model = Model(inputs=input1, outputs=[dnn_output])
+    model.compile(loss='mean_squared_error', optimizer='Nadam')
+    model.summary()
+
+    # Train model
+    history = model.fit(X_train, y_train, epochs=150, batch_size=32, validation_split=0.1, verbose=1)
 
     # Save the model and scaler
     model_dir = 'AI/model'
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
-
     model_save_path = os.path.join(model_dir, 'bitcoin_lstm_model.keras')
     model.save(model_save_path)
     print(f"Model saved to {model_save_path}")
-
     import joblib
     scaler_save_path = os.path.join(model_dir, 'bitcoin_price_scaler.save')
     joblib.dump(scaler, scaler_save_path)
@@ -173,7 +206,6 @@ def train_and_save_model():
     loss = history.history['loss']
     val_loss = history.history['val_loss']
     epochs = range(len(loss))
-
     plt.figure(figsize=(10, 6))
     plt.plot(epochs, loss, 'r', label='Training loss')
     plt.plot(epochs, val_loss, 'b', label='Validation loss')
@@ -182,31 +214,32 @@ def train_and_save_model():
     plt.savefig(os.path.join(model_dir, 'loss_curves.png'))
 
     # Evaluate the model on both training and test data
-    train_rmse, train_mae, train_r2 = evaluate_model(model, X_train, y_train, scaler, "Training Data")
-    test_rmse, test_mae, test_r2 = evaluate_model(model, X_test, y_test, scaler, "Testing Data")
+    from sklearn.metrics import mean_absolute_percentage_error
+    test_loss = model.evaluate(X_test, y_test)
+    y_pred = model.predict(X_test)
+    MAPE = mean_absolute_percentage_error(y_test, y_pred)
+    Accuracy = 1 - MAPE
+    print("Test Loss:", test_loss)
+    print("Test MAPE:", MAPE)
+    print("Test Accuracy:", Accuracy)
 
     # Visualize actual vs predicted values on test data
-    test_predict = model.predict(X_test)
-    test_predict = scaler.inverse_transform(test_predict)
-
-    # Create a DataFrame for visualization
-    actual_vs_pred = pd.DataFrame({
-        'Actual': scaler.inverse_transform(y_test.reshape(-1,1)).flatten(),
-        'Predicted': test_predict.flatten()
-    })
-
-    # Plot actual vs predicted values
-    plt.figure(figsize=(12, 6))
-    plt.plot(actual_vs_pred['Actual'], label='Actual Prices')
-    plt.plot(actual_vs_pred['Predicted'], label='Predicted Prices')
-    plt.title('Actual vs Predicted Bitcoin Prices (Test Data)')
-    plt.xlabel('Time')
-    plt.ylabel('Price (USD)')
-    plt.legend()
-    plt.grid(True)
+    y_test_true = scaler.inverse_transform(y_test)
+    y_test_pred = scaler.inverse_transform(y_pred)
+    plt.figure(figsize=(15, 6), dpi=150)
+    plt.rcParams['axes.facecolor'] = 'yellow'
+    plt.rc('axes',edgecolor='white')
+    plt.plot(dates.iloc[:-test_size], scaler.inverse_transform(train_data), color='black', lw=2)
+    plt.plot(dates.iloc[-test_size:], y_test_true, color='blue', lw=2)
+    plt.plot(dates.iloc[-test_size:], y_test_pred, color='red', lw=2)
+    plt.title('Model Performance on Bitcoin Price Prediction', fontsize=15)
+    plt.xlabel('Date', fontsize=12)
+    plt.ylabel('Price', fontsize=12)
+    plt.legend(['Training Data', 'Actual Test Data', 'Predicted Test Data'], loc='upper left', prop={'size': 15})
+    plt.grid(color='white')
     plt.savefig(os.path.join(model_dir, 'actual_vs_predicted.png'))
 
-    return model, scaler, test_data, time_step, closedf, dates
+    return model, scaler, test_data, window_size, closedf, dates
 
 # Main execution
 if __name__ == "__main__":
