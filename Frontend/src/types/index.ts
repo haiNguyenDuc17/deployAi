@@ -5,7 +5,7 @@ export interface PredictionResponse {
   };
 }
 
-export type TimeFrame = '1m' | '6m' | '1y' | '3y';
+export type TimeFrame = '1m' | '6m' | '1y' | '3y' | 'custom';
 
 export interface TimeFrameMapping {
   [key: string]: number;
@@ -14,4 +14,14 @@ export interface TimeFrameMapping {
 export interface ChartData {
   dates: string[];
   prices: number[];
-} 
+}
+
+export interface DateRangeSelection {
+  startDate: string;
+  endDate: string;
+}
+
+export interface PredictionData {
+  date: string;
+  price: number;
+}

@@ -7,6 +7,8 @@ import math
 import datetime as dt
 import matplotlib.pyplot as plt
 import joblib
+import csv
+import shutil
 
 # For evaluation and preprocessing
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
@@ -139,6 +141,230 @@ def create_multivariate_sequences(price_data, volume_data, window_size):
         y = y[valid_indices]
 
     return X, y
+
+def predict_future_multivariate(model, price_scaler, volume_scaler, price_data, volume_data, window_size, days_to_predict):
+    """
+    Generate future price predictions using the trained multivariate LSTM model
+
+    Args:
+        model: Trained LSTM model
+        price_scaler: Fitted MinMaxScaler for price data
+        volume_scaler: Fitted MinMaxScaler for volume data
+        price_data: Scaled price data array
+        volume_data: Scaled volume data array
+        window_size: Number of days to look back for prediction
+        days_to_predict: Number of future days to predict
+
+    Returns:
+        predictions: Array of predicted prices in original scale
+    """
+    print(f"\n=== Generating Future Predictions for {days_to_predict} Days ===")
+
+    # Get the last window_size days of data for initial input
+    last_price_sequence = price_data[-window_size:].flatten()
+    last_volume_sequence = volume_data[-window_size:].flatten()
+
+    # Initialize input sequences
+    temp_input_price = list(last_price_sequence)
+    temp_input_volume = list(last_volume_sequence)
+
+    # Calculate historical volatility for noise generation
+    historical_data = price_scaler.inverse_transform(price_data[-30:])  # Use last 30 days
+    daily_returns = np.diff(historical_data.flatten()) / historical_data[:-1].flatten()
+    historical_volatility = np.std(daily_returns)
+
+    # Volatility scale factor (can be adjusted)
+    volatility_scale = 0.7
+
+    lst_output = []
+    n_steps = window_size
+    i = 0
+
+    print("Generating predictions with progress tracking...")
+    print(f"Initial sequence lengths - Price: {len(temp_input_price)}, Volume: {len(temp_input_volume)}")
+
+    while i < days_to_predict:
+        if len(temp_input_price) > n_steps:
+            # Use the last n_steps for prediction
+            price_seq = np.array(temp_input_price[-n_steps:])
+            volume_seq = np.array(temp_input_volume[-n_steps:])
+        else:
+            # Use all available data if less than n_steps
+            price_seq = np.array(temp_input_price)
+            volume_seq = np.array(temp_input_volume)
+
+        # Ensure we have exactly n_steps
+        if len(price_seq) != n_steps:
+            print(f"❌ Error: Sequence length mismatch. Expected {n_steps}, got {len(price_seq)}")
+            break
+
+        # Combine features for multivariate input
+        x_input = np.column_stack([price_seq, volume_seq])
+        x_input = x_input.reshape((1, n_steps, 2))
+
+        # Make prediction
+        yhat = model.predict(x_input, verbose=0)
+        pred_value = yhat[0][0]
+
+        # Add controlled noise based on historical volatility
+        scaled_value = pred_value
+        noise = np.random.normal(0, historical_volatility * volatility_scale * abs(scaled_value), 1)[0]
+        final_pred = scaled_value + noise
+
+        # Update input sequences (remove oldest, add newest)
+        temp_input_price.append(final_pred)
+        temp_input_volume.append(temp_input_volume[-1])  # Use last volume value
+
+        lst_output.append(final_pred)
+        i += 1
+
+        # Progress tracking
+        if i % 100 == 0 or i == days_to_predict:
+            print(f"Progress: {i}/{days_to_predict} predictions generated ({i/days_to_predict*100:.1f}%)")
+
+    if len(lst_output) != days_to_predict:
+        print(f"⚠️  Warning: Generated {len(lst_output)} predictions instead of {days_to_predict}")
+
+    # Transform predictions back to original scale
+    predictions = price_scaler.inverse_transform(np.array(lst_output).reshape(-1, 1)).reshape(1, -1).tolist()[0]
+
+    print(f"Successfully generated {len(predictions)} predictions")
+    print(f"Price range: ${min(predictions):.2f} - ${max(predictions):.2f}")
+
+    return predictions
+
+def generate_and_save_csv_predictions(model, price_scaler, volume_scaler, closedf, window_size):
+    """
+    Generate 1095-day predictions and save to CSV file
+
+    Args:
+        model: Trained LSTM model
+        price_scaler: Fitted price scaler
+        volume_scaler: Fitted volume scaler
+        closedf: DataFrame with historical data
+        window_size: Window size used for training
+    """
+    try:
+        print("\n" + "="*80)
+        print("GENERATING CSV PREDICTIONS")
+        print("="*80)
+
+        # Prepare data for prediction
+        price = closedf['Price']
+        volume = closedf['Volume']
+
+        print(f"Data shapes before scaling:")
+        print(f"  Price: {price.shape}")
+        print(f"  Volume: {volume.shape}")
+
+        # Scale the data using the fitted scalers
+        price_scaled = price_scaler.transform(price.values.reshape(-1, 1))
+        volume_scaled = volume_scaler.transform(volume.values.reshape(-1, 1))
+
+        print(f"Data shapes after scaling:")
+        print(f"  Price scaled: {price_scaled.shape}")
+        print(f"  Volume scaled: {volume_scaled.shape}")
+        print(f"  Window size: {window_size}")
+
+        # Generate predictions for 1095 days (3 years)
+        days_to_predict = 1095
+        predictions = predict_future_multivariate(
+            model, price_scaler, volume_scaler,
+            price_scaled, volume_scaled,
+            window_size, days_to_predict
+        )
+
+        # Generate future dates starting from the day after the last date in dataset
+        last_date = closedf['Date'].max()
+        future_dates = []
+
+        print(f"\nGenerating dates starting from: {last_date.date()}")
+
+        for i in range(1, days_to_predict + 1):
+            future_date = last_date + pd.Timedelta(days=i)
+            future_dates.append(future_date.strftime('%Y-%m-%d'))
+
+        # Validate data integrity
+        if len(future_dates) != len(predictions):
+            raise ValueError(f"Date count ({len(future_dates)}) doesn't match prediction count ({len(predictions)})")
+
+        if len(predictions) != days_to_predict:
+            raise ValueError(f"Expected {days_to_predict} predictions, got {len(predictions)}")
+
+        # Create CSV file path
+        csv_path = 'Data/bitcoin_predictions.csv'
+
+        # Ensure Data directory exists
+        os.makedirs('Data', exist_ok=True)
+
+        # Write to CSV file
+        print(f"\nSaving predictions to: {csv_path}")
+
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+
+            # Write header
+            writer.writerow(['Date', 'Predicted_Price'])
+
+            # Write data rows
+            for date, price in zip(future_dates, predictions):
+                writer.writerow([date, f"{price:.2f}"])
+
+        # Validation: Read back and verify
+        print("\nValidating CSV file...")
+        validation_df = pd.read_csv(csv_path)
+
+        if len(validation_df) != days_to_predict:
+            raise ValueError(f"CSV validation failed: Expected {days_to_predict} rows, found {len(validation_df)}")
+
+        # Check for any missing or invalid data
+        if validation_df['Date'].isnull().any():
+            raise ValueError("CSV validation failed: Found null dates")
+
+        if validation_df['Predicted_Price'].isnull().any():
+            raise ValueError("CSV validation failed: Found null prices")
+
+        # Display summary statistics
+        print(f"\n=== CSV Generation Summary ===")
+        print(f"File saved: {csv_path}")
+        print(f"Total predictions: {len(validation_df)}")
+        print(f"Date range: {validation_df['Date'].iloc[0]} to {validation_df['Date'].iloc[-1]}")
+        print(f"Price range: ${validation_df['Predicted_Price'].min():.2f} - ${validation_df['Predicted_Price'].max():.2f}")
+        print(f"Average predicted price: ${validation_df['Predicted_Price'].mean():.2f}")
+
+        print("\n✓ CSV file generated and validated successfully!")
+
+        # Copy CSV to frontend public directory
+        copy_to_frontend_public(csv_path)
+
+        return csv_path
+
+    except Exception as e:
+        print(f"\n❌ Error generating CSV predictions: {str(e)}")
+        print("Please check the model and data integrity.")
+        raise
+
+def copy_to_frontend_public(csv_path):
+    """Copy the CSV file to the frontend public directory for web access"""
+    try:
+        frontend_public_dir = 'Frontend/public/Data'
+        frontend_csv_path = os.path.join(frontend_public_dir, 'bitcoin_predictions.csv')
+
+        # Create directory if it doesn't exist
+        os.makedirs(frontend_public_dir, exist_ok=True)
+
+        # Copy the file
+        shutil.copy2(csv_path, frontend_csv_path)
+
+        # Verify copy
+        if os.path.exists(frontend_csv_path):
+            print(f"✅ CSV copied to frontend: {frontend_csv_path}")
+        else:
+            print(f"⚠️  Warning: Failed to copy CSV to frontend directory")
+
+    except Exception as e:
+        print(f"⚠️  Warning: Could not copy CSV to frontend directory: {str(e)}")
+        print("You can manually copy the file or run: python copy_csv_to_public.py")
 
 def train_and_save_model():
     """Train Advanced Multivariate LSTM model with validation on 3 years, then full dataset training"""
@@ -504,5 +730,21 @@ if __name__ == "__main__":
     print("- Training loss curves: AI/model/training_loss_curves.png")
     print("- Model analysis: AI/model/advanced_lstm_analysis.png")
     print("- Price-volume analysis: AI/model/price_volume_analysis.png")
-    print("\nThe Advanced Multivariate LSTM model is ready for use!")
+
+    # Generate CSV predictions
+    try:
+        csv_path = generate_and_save_csv_predictions(model, price_scaler, volume_scaler, closedf, window_size)
+        print(f"\n✓ Predictions CSV generated: {csv_path}")
+    except Exception as e:
+        print(f"\n❌ Failed to generate CSV predictions: {str(e)}")
+        print("Model training completed, but CSV generation failed.")
+
+    print("\n" + "="*80)
+    print("PROCESS COMPLETED!")
+    print("="*80)
+    print("\nFiles generated:")
+    print("1. Model files in AI/model/")
+    print("2. Predictions CSV: Data/bitcoin_predictions.csv")
+    print("\nThe system is ready for frontend use!")
+    print("Run the frontend with: cd Frontend && npm start")
     print("="*80)

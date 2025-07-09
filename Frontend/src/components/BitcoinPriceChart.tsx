@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { 
-  ChartContainer, 
-  ChartHeader, 
-  ChartTitle, 
-  TimeFrameSelector, 
-  TimeFrameButton, 
+import {
+  ChartContainer,
+  ChartHeader,
+  ChartTitle,
+  TimeFrameSelector,
+  TimeFrameButton,
   Disclaimer,
   LoadingSpinner
 } from '../styles/StyledComponents';
-import { fetchPrediction } from '../api/predictionApi';
-import { TimeFrame, TimeFrameMapping, ChartData } from '../types';
+import {
+  loadPredictionData,
+  filterPredictionsByDays,
+  filterPredictionsByDateRange,
+  convertToChartData,
+  PredictionData
+} from '../api/csvDataService';
+import { TimeFrame, TimeFrameMapping, ChartData, DateRangeSelection } from '../types';
+import DateRangeSelector from './DateRangeSelector';
 
 const timeFrameMap: TimeFrameMapping = {
   '1m': 30,
@@ -24,41 +31,51 @@ const BitcoinPriceChart: React.FC = () => {
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [allPredictions, setAllPredictions] = useState<PredictionData[]>([]);
+  const [showCustomRange, setShowCustomRange] = useState<boolean>(false);
 
+  // Load all predictions on component mount
   useEffect(() => {
-    const loadData = async () => {
+    const loadAllPredictions = async () => {
       try {
         setLoading(true);
         setError(null);
-        
+
+        console.log('Loading CSV prediction data...');
+        const predictions = await loadPredictionData();
+        setAllPredictions(predictions);
+
+        // Set initial data for default timeframe
         const days = timeFrameMap[selectedTimeFrame];
-        console.log(`Loading data for ${selectedTimeFrame} (${days} days)`);
-        
-        console.log('Fetching data from API');
-        const data = await fetchPrediction(days);
-        
-        const key = `${days}_days`;
-        
-        if (data && data[key]) {
-          console.log(`Successfully fetched data for ${days} days:`, data[key]);
-          setChartData({
-            dates: data[key].dates,
-            prices: data[key].predicted_prices,
-          });
-        } else {
-          console.error('Invalid data format:', data);
-          throw new Error('Invalid data format received from API');
-        }
+        const filteredPredictions = filterPredictionsByDays(predictions, days);
+        const chartData = convertToChartData(filteredPredictions);
+        setChartData(chartData);
+
+        console.log(`Successfully loaded ${predictions.length} total predictions`);
+        console.log(`Showing ${filteredPredictions.length} predictions for ${selectedTimeFrame}`);
+
       } catch (err: any) {
-        console.error('Error loading chart data:', err);
-        setError(err.message || 'Failed to load prediction data. Please try again later.');
+        console.error('Error loading CSV data:', err);
+        setError(err.message || 'Failed to load prediction data. Please ensure the model has been trained and CSV file exists.');
       } finally {
         setLoading(false);
       }
     };
 
-    loadData();
-  }, [selectedTimeFrame]);
+    loadAllPredictions();
+  }, []);
+
+  // Update chart data when timeframe changes
+  useEffect(() => {
+    if (allPredictions.length === 0 || selectedTimeFrame === 'custom') return;
+
+    const days = timeFrameMap[selectedTimeFrame];
+    const filteredPredictions = filterPredictionsByDays(allPredictions, days);
+    const chartData = convertToChartData(filteredPredictions);
+    setChartData(chartData);
+
+    console.log(`Updated chart for ${selectedTimeFrame} (${days} days): ${filteredPredictions.length} predictions`);
+  }, [selectedTimeFrame, allPredictions]);
 
   const getOption = () => {
     if (!chartData) return {};
@@ -171,10 +188,43 @@ const BitcoinPriceChart: React.FC = () => {
 
   const handleTimeFrameChange = (timeFrame: TimeFrame) => {
     setSelectedTimeFrame(timeFrame);
+    if (timeFrame === 'custom') {
+      setShowCustomRange(true);
+    } else {
+      setShowCustomRange(false);
+    }
+  };
+
+  const handleDateRangeChange = (dateRange: DateRangeSelection) => {
+    if (allPredictions.length === 0) return;
+
+    try {
+      const filteredPredictions = filterPredictionsByDateRange(
+        allPredictions,
+        dateRange.startDate,
+        dateRange.endDate
+      );
+
+      if (filteredPredictions.length === 0) {
+        setError('No predictions available for the selected date range.');
+        return;
+      }
+
+      const chartData = convertToChartData(filteredPredictions);
+      setChartData(chartData);
+      setError(null);
+
+      console.log(`Custom date range applied: ${dateRange.startDate} to ${dateRange.endDate}`);
+      console.log(`Showing ${filteredPredictions.length} predictions`);
+
+    } catch (err: any) {
+      console.error('Error applying date range:', err);
+      setError('Failed to apply date range filter.');
+    }
   };
 
   const renderErrorMessage = () => {
-    const isApiConnectionError = error?.includes('Network error') || error?.includes('404');
+    const isCsvError = error?.includes('CSV') || error?.includes('model has been trained');
     
     return (
       <div style={{ 
@@ -191,10 +241,10 @@ const BitcoinPriceChart: React.FC = () => {
           {error}
         </div>
         
-        {isApiConnectionError && (
-          <div style={{ 
-            color: '#8b949e', 
-            fontSize: '0.9rem', 
+        {isCsvError && (
+          <div style={{
+            color: '#8b949e',
+            fontSize: '0.9rem',
             marginTop: '20px',
             maxWidth: '600px',
             textAlign: 'left',
@@ -202,13 +252,13 @@ const BitcoinPriceChart: React.FC = () => {
             padding: '15px',
             borderRadius: '5px'
           }}>
-            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Diagnostic Steps:</div>
+            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>To fix this issue:</div>
             <ol style={{ paddingLeft: '20px', margin: 0 }}>
-              <li>Make sure your Flask API server is running</li>
-              <li>Open browser DevTools (F12)</li>
-              <li>In the console tab, run: <code style={{ background: '#21262d', padding: '3px 5px', borderRadius: '3px' }}>testApiEndpoints()</code></li>
-              <li>Look for successful endpoint connections in the results</li>
-              <li>Update the API configuration in the code accordingly</li>
+              <li>Make sure you have trained the model first</li>
+              <li>Run: <code style={{ background: '#21262d', padding: '3px 5px', borderRadius: '3px' }}>python AI/bitcoin_price_prediction_using_lstm.py</code></li>
+              <li>Wait for the training to complete and CSV file to be generated</li>
+              <li>Ensure <code style={{ background: '#21262d', padding: '3px 5px', borderRadius: '3px' }}>Data/bitcoin_predictions.csv</code> exists</li>
+              <li>Refresh this page after the CSV file is created</li>
             </ol>
           </div>
         )}
@@ -236,40 +286,53 @@ const BitcoinPriceChart: React.FC = () => {
       <ChartHeader>
         <ChartTitle>Bitcoin Price Prediction</ChartTitle>
         <TimeFrameSelector>
-          <TimeFrameButton 
-            active={selectedTimeFrame === '1m'} 
+          <TimeFrameButton
+            active={selectedTimeFrame === '1m'}
             onClick={() => handleTimeFrameChange('1m')}
           >
             1M
           </TimeFrameButton>
-          <TimeFrameButton 
-            active={selectedTimeFrame === '6m'} 
+          <TimeFrameButton
+            active={selectedTimeFrame === '6m'}
             onClick={() => handleTimeFrameChange('6m')}
           >
             6M
           </TimeFrameButton>
-          <TimeFrameButton 
-            active={selectedTimeFrame === '1y'} 
+          <TimeFrameButton
+            active={selectedTimeFrame === '1y'}
             onClick={() => handleTimeFrameChange('1y')}
           >
             1Y
           </TimeFrameButton>
-          <TimeFrameButton 
-            active={selectedTimeFrame === '3y'} 
+          <TimeFrameButton
+            active={selectedTimeFrame === '3y'}
             onClick={() => handleTimeFrameChange('3y')}
           >
             3Y
           </TimeFrameButton>
+          <TimeFrameButton
+            active={selectedTimeFrame === 'custom'}
+            onClick={() => handleTimeFrameChange('custom')}
+          >
+            Custom
+          </TimeFrameButton>
         </TimeFrameSelector>
       </ChartHeader>
-      
+
+      {showCustomRange && !loading && !error && (
+        <DateRangeSelector
+          onDateRangeChange={handleDateRangeChange}
+          disabled={loading}
+        />
+      )}
+
       {loading ? (
         <LoadingSpinner />
       ) : error ? (
         renderErrorMessage()
       ) : (
-        <ReactECharts 
-          option={getOption()} 
+        <ReactECharts
+          option={getOption()}
           style={{ height: '600px' }}
           opts={{ renderer: 'canvas' }}
           notMerge={true}
