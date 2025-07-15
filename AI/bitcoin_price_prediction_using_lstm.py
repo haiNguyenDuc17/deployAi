@@ -292,10 +292,10 @@ def generate_and_save_csv_predictions(model, price_scaler, volume_scaler, closed
             raise ValueError(f"Expected {days_to_predict} predictions, got {len(predictions)}")
 
         # Create CSV file path
-        csv_path = 'Data/bitcoin_predictions.csv'
+        csv_path = 'Frontend/public/Data/bitcoin_predictions.csv'
 
-        # Ensure Data directory exists
-        os.makedirs('Data', exist_ok=True)
+        # Ensure Frontend/public/Data directory exists
+        os.makedirs('Frontend/public/Data', exist_ok=True)
 
         # Write to CSV file
         print(f"\nSaving predictions to: {csv_path}")
@@ -333,9 +333,6 @@ def generate_and_save_csv_predictions(model, price_scaler, volume_scaler, closed
         print(f"Average predicted price: ${validation_df['Predicted_Price'].mean():.2f}")
 
         print("\n✓ CSV file generated and validated successfully!")
-
-        # Copy CSV to frontend public directory
-        copy_to_frontend_public(csv_path)
 
         return csv_path
 
@@ -744,7 +741,7 @@ if __name__ == "__main__":
     print("="*80)
     print("\nFiles generated:")
     print("1. Model files in AI/model/")
-    print("2. Predictions CSV: Data/bitcoin_predictions.csv")
+    print("2. Predictions CSV: Frontend/public/Data/bitcoin_predictions.csv")
     print("\nThe system is ready for frontend use!")
     print("Run the frontend with: cd Frontend && npm start")
     print("="*80)
