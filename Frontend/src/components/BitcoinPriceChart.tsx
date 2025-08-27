@@ -1,23 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
-import {
-  ChartContainer,
-  ChartHeader,
-  ChartTitle,
-  TimeFrameSelector,
-  TimeFrameButton,
-  Disclaimer,
-  LoadingSpinner
-} from '../styles/StyledComponents';
-import {
-  loadPredictionData,
-  filterPredictionsByDays,
-  filterPredictionsByDateRange,
-  convertToChartData,
-  PredictionData
-} from '../api/csvDataService';
-import { TimeFrame, TimeFrameMapping, ChartData, DateRangeSelection } from '../types';
-import DateRangeSelector from './DateRangeSelector';
+import { Button } from 'primereact/button';
+import { Calendar } from 'primereact/calendar';
+import { Message } from 'primereact/message';
+import { loadPredictionData, filterPredictionsByDays, filterPredictionsByDateRange, PredictionData } from '../api/csvDataService';
+import { TimeFrame, TimeFrameMapping, DateRangeSelection } from '../types';
 
 const timeFrameMap: TimeFrameMapping = {
   '1m': 30,
@@ -28,70 +15,117 @@ const timeFrameMap: TimeFrameMapping = {
 
 const BitcoinPriceChart: React.FC = () => {
   const [selectedTimeFrame, setSelectedTimeFrame] = useState<TimeFrame>('1m');
-  const [chartData, setChartData] = useState<ChartData | null>(null);
+  const [predictionData, setPredictionData] = useState<PredictionData[]>([]);
+  const [filteredData, setFilteredData] = useState<PredictionData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [allPredictions, setAllPredictions] = useState<PredictionData[]>([]);
   const [showCustomRange, setShowCustomRange] = useState<boolean>(false);
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+  const [customError, setCustomError] = useState<string | null>(null);
 
-  // Load all predictions on component mount
   useEffect(() => {
-    const loadAllPredictions = async () => {
+    const loadPredictions = async () => {
       try {
         setLoading(true);
         setError(null);
+        const data = await loadPredictionData();
+        setPredictionData(data);
 
-        console.log('Loading CSV prediction data...');
-        const predictions = await loadPredictionData();
-        setAllPredictions(predictions);
-
-        // Set initial data for default timeframe
+        // Set initial filtered data for default timeframe
         const days = timeFrameMap[selectedTimeFrame];
-        const filteredPredictions = filterPredictionsByDays(predictions, days);
-        const chartData = convertToChartData(filteredPredictions);
-        setChartData(chartData);
-
-        console.log(`Successfully loaded ${predictions.length} total predictions`);
-        console.log(`Showing ${filteredPredictions.length} predictions for ${selectedTimeFrame}`);
-
+        const filtered = filterPredictionsByDays(data, days);
+        setFilteredData(filtered);
       } catch (err: any) {
-        console.error('Error loading CSV data:', err);
-        setError(err.message || 'Failed to load prediction data. Please ensure the model has been trained and CSV file exists.');
+        console.error('Error loading prediction data:', err);
+        setError(err.message || 'Failed to load Bitcoin prediction data. Please ensure the CSV file exists.');
       } finally {
         setLoading(false);
       }
     };
 
-    loadAllPredictions();
+    loadPredictions();
   }, []);
 
-  // Update chart data when timeframe changes
+  // Update filtered data when timeframe changes
   useEffect(() => {
-    if (allPredictions.length === 0 || selectedTimeFrame === 'custom') return;
+    if (predictionData.length === 0 || selectedTimeFrame === 'custom') return;
 
     const days = timeFrameMap[selectedTimeFrame];
-    const filteredPredictions = filterPredictionsByDays(allPredictions, days);
-    const chartData = convertToChartData(filteredPredictions);
-    setChartData(chartData);
+    const filtered = filterPredictionsByDays(predictionData, days);
+    setFilteredData(filtered);
+  }, [selectedTimeFrame, predictionData]);
 
-    console.log(`Updated chart for ${selectedTimeFrame} (${days} days): ${filteredPredictions.length} predictions`);
-  }, [selectedTimeFrame, allPredictions]);
+  const handleTimeFrameChange = (timeFrame: TimeFrame) => {
+    setSelectedTimeFrame(timeFrame);
+    setCustomError(null);
+
+    if (timeFrame === 'custom') {
+      setShowCustomRange(true);
+    } else {
+      setShowCustomRange(false);
+      // Data will be filtered by useEffect
+    }
+  };
+
+  const handleCustomDateRangeApply = () => {
+    if (!customStartDate || !customEndDate) {
+      setCustomError('Please select both start and end dates.');
+      return;
+    }
+
+    if (customStartDate >= customEndDate) {
+      setCustomError('Start date must be before end date.');
+      return;
+    }
+
+    // Check if date range exceeds 3 years
+    const diffTime = Math.abs(customEndDate.getTime() - customStartDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 1095) {
+      setCustomError('Date range cannot exceed 3 years (1095 days).');
+      return;
+    }
+
+    setCustomError(null);
+
+    const startDateStr = customStartDate.toISOString().split('T')[0];
+    const endDateStr = customEndDate.toISOString().split('T')[0];
+
+    try {
+      const filtered = filterPredictionsByDateRange(predictionData, startDateStr, endDateStr);
+
+      if (filtered.length === 0) {
+        setCustomError('No prediction data available for the selected date range.');
+        return;
+      }
+
+      setFilteredData(filtered);
+    } catch (err: any) {
+      setCustomError('Error applying date range filter.');
+    }
+  };
 
   const getOption = () => {
-    if (!chartData) return {};
+    if (filteredData.length === 0) return {};
+
+    const dates = filteredData.map(item => item.date);
+    const prices = filteredData.map(item => item.price);
 
     return {
+      backgroundColor: 'transparent',
       tooltip: {
         trigger: 'axis',
-        backgroundColor: 'rgba(13, 17, 23, 0.9)',
-        borderColor: '#30363d',
+        backgroundColor: 'rgba(42, 42, 42, 0.95)',
+        borderColor: '#404040',
         textStyle: {
-          color: '#e6e8ea',
+          color: '#ffffff',
         },
         formatter: (params: any) => {
           const dataIndex = params[0].dataIndex;
-          const date = chartData.dates[dataIndex];
-          const price = chartData.prices[dataIndex].toLocaleString('en-US', {
+          const date = dates[dataIndex];
+          const price = prices[dataIndex].toLocaleString('en-US', {
             style: 'currency',
             currency: 'USD',
           });
@@ -102,18 +136,19 @@ const BitcoinPriceChart: React.FC = () => {
         left: '3%',
         right: '4%',
         bottom: '3%',
+        top: '10%',
         containLabel: true,
       },
       xAxis: {
         type: 'category',
-        data: chartData.dates,
+        data: dates,
         axisLine: {
           lineStyle: {
-            color: '#30363d',
+            color: '#404040',
           },
         },
         axisLabel: {
-          color: '#8b949e',
+          color: '#888888',
           formatter: (value: string) => {
             const date = new Date(value);
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -125,42 +160,36 @@ const BitcoinPriceChart: React.FC = () => {
         type: 'value',
         axisLine: {
           lineStyle: {
-            color: '#30363d',
+            color: '#404040',
           },
         },
         splitLine: {
           lineStyle: {
-            color: '#21262d',
+            color: '#333333',
           },
         },
         axisLabel: {
-          color: '#8b949e',
+          color: '#888888',
           formatter: (value: number) => {
             return '$' + value.toLocaleString();
           },
         },
         scale: true,
-        min: (value: { min: number }) => {
-          // Set min to ~20% below the minimum value
-          return Math.floor(value.min * 0.8);
-        },
-        max: (value: { max: number }) => {
-          // Set max to ~20% above the maximum value
-          return Math.ceil(value.max * 1.2);
-        },
-        splitNumber: 20,
-        minInterval: 500
       },
       series: [
         {
-          name: 'BTC Price Prediction',
+          name: 'BTC Prediction',
           type: 'line',
-          data: chartData.prices,
+          data: prices,
           smooth: true,
-          symbol: 'none',
+          symbol: 'circle',
+          symbolSize: 4,
           lineStyle: {
-            color: '#f7931a',
+            color: '#ff8c00',
             width: 3,
+          },
+          itemStyle: {
+            color: '#ff8c00',
           },
           areaStyle: {
             color: {
@@ -172,11 +201,11 @@ const BitcoinPriceChart: React.FC = () => {
               colorStops: [
                 {
                   offset: 0,
-                  color: 'rgba(247, 147, 26, 0.5)',
+                  color: 'rgba(255, 140, 0, 0.3)',
                 },
                 {
                   offset: 1,
-                  color: 'rgba(247, 147, 26, 0.05)',
+                  color: 'rgba(255, 140, 0, 0.05)',
                 },
               ],
             },
@@ -186,163 +215,189 @@ const BitcoinPriceChart: React.FC = () => {
     };
   };
 
-  const handleTimeFrameChange = (timeFrame: TimeFrame) => {
-    setSelectedTimeFrame(timeFrame);
-    if (timeFrame === 'custom') {
-      setShowCustomRange(true);
-    } else {
-      setShowCustomRange(false);
-    }
-  };
-
-  const handleDateRangeChange = (dateRange: DateRangeSelection) => {
-    if (allPredictions.length === 0) return;
-
-    try {
-      const filteredPredictions = filterPredictionsByDateRange(
-        allPredictions,
-        dateRange.startDate,
-        dateRange.endDate
-      );
-
-      if (filteredPredictions.length === 0) {
-        setError('No predictions available for the selected date range.');
-        return;
-      }
-
-      const chartData = convertToChartData(filteredPredictions);
-      setChartData(chartData);
-      setError(null);
-
-      console.log(`Custom date range applied: ${dateRange.startDate} to ${dateRange.endDate}`);
-      console.log(`Showing ${filteredPredictions.length} predictions`);
-
-    } catch (err: any) {
-      console.error('Error applying date range:', err);
-      setError('Failed to apply date range filter.');
-    }
-  };
-
-  const renderErrorMessage = () => {
-    const isCsvError = error?.includes('CSV') || error?.includes('model has been trained');
-    
+  if (loading) {
     return (
-      <div style={{ 
-        height: '400px', 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        color: '#f85149',
-        textAlign: 'center',
-        padding: '0 20px'
-      }}>
-        <div style={{ fontSize: '1.2rem', marginBottom: '10px' }}>
-          {error}
-        </div>
-        
-        {isCsvError && (
-          <div style={{
-            color: '#8b949e',
-            fontSize: '0.9rem',
-            marginTop: '20px',
-            maxWidth: '600px',
-            textAlign: 'left',
-            background: 'rgba(255,255,255,0.05)',
-            padding: '15px',
-            borderRadius: '5px'
-          }}>
-            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>To fix this issue:</div>
-            <ol style={{ paddingLeft: '20px', margin: 0 }}>
-              <li>Make sure you have trained the model first</li>
-              <li>Run: <code style={{ background: '#21262d', padding: '3px 5px', borderRadius: '3px' }}>python AI/bitcoin_price_prediction_using_lstm.py</code></li>
-              <li>Wait for the training to complete and CSV file to be generated</li>
-              <li>Ensure <code style={{ background: '#21262d', padding: '3px 5px', borderRadius: '3px' }}>Data/bitcoin_predictions.csv</code> exists</li>
-              <li>Refresh this page after the CSV file is created</li>
-            </ol>
-          </div>
-        )}
-        
-        <button 
-          onClick={() => handleTimeFrameChange(selectedTimeFrame)} 
-          style={{ 
-            marginTop: '15px', 
-            padding: '8px 15px', 
-            backgroundColor: 'var(--accent)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
-          }}
-        >
-          Retry
-        </button>
+      <div style={{ height: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: '#ffffff' }}>Loading Bitcoin prediction data...</div>
       </div>
     );
-  };
+  }
+
+  if (error) {
+    return (
+      <div style={{ height: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div style={{ color: '#ff6b6b', textAlign: 'center', marginBottom: '20px' }}>{error}</div>
+        <Button
+          label="Retry"
+          onClick={() => window.location.reload()}
+          className="p-button-outlined"
+          style={{ borderColor: '#ff8c00', color: '#ff8c00' }}
+        />
+      </div>
+    );
+  }
 
   return (
-    <ChartContainer>
-      <ChartHeader>
-        <ChartTitle>Bitcoin Price Prediction</ChartTitle>
-        <TimeFrameSelector>
-          <TimeFrameButton
-            active={selectedTimeFrame === '1m'}
-            onClick={() => handleTimeFrameChange('1m')}
-          >
-            1M
-          </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === '6m'}
-            onClick={() => handleTimeFrameChange('6m')}
-          >
-            6M
-          </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === '1y'}
-            onClick={() => handleTimeFrameChange('1y')}
-          >
-            1Y
-          </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === '3y'}
-            onClick={() => handleTimeFrameChange('3y')}
-          >
-            3Y
-          </TimeFrameButton>
-          <TimeFrameButton
-            active={selectedTimeFrame === 'custom'}
-            onClick={() => handleTimeFrameChange('custom')}
-          >
-            Custom
-          </TimeFrameButton>
-        </TimeFrameSelector>
-      </ChartHeader>
-
-      {showCustomRange && !loading && !error && (
-        <DateRangeSelector
-          onDateRangeChange={handleDateRangeChange}
-          disabled={loading}
+    <div style={{ width: '100%' }}>
+      {/* Time Frame Filter Buttons */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '20px',
+        flexWrap: 'wrap',
+        alignItems: 'center'
+      }}>
+        <Button
+          label="1M"
+          onClick={() => handleTimeFrameChange('1m')}
+          className={selectedTimeFrame === '1m' ? 'p-button-warning' : 'p-button-outlined'}
+          size="small"
+          style={selectedTimeFrame === '1m' ?
+            { backgroundColor: '#ff8c00', border: 'none' } :
+            { borderColor: '#404040', color: '#ffffff', backgroundColor: 'transparent' }
+          }
         />
+        <Button
+          label="6M"
+          onClick={() => handleTimeFrameChange('6m')}
+          className={selectedTimeFrame === '6m' ? 'p-button-warning' : 'p-button-outlined'}
+          size="small"
+          style={selectedTimeFrame === '6m' ?
+            { backgroundColor: '#ff8c00', border: 'none' } :
+            { borderColor: '#404040', color: '#ffffff', backgroundColor: 'transparent' }
+          }
+        />
+        <Button
+          label="1Y"
+          onClick={() => handleTimeFrameChange('1y')}
+          className={selectedTimeFrame === '1y' ? 'p-button-warning' : 'p-button-outlined'}
+          size="small"
+          style={selectedTimeFrame === '1y' ?
+            { backgroundColor: '#ff8c00', border: 'none' } :
+            { borderColor: '#404040', color: '#ffffff', backgroundColor: 'transparent' }
+          }
+        />
+        <Button
+          label="3Y"
+          onClick={() => handleTimeFrameChange('3y')}
+          className={selectedTimeFrame === '3y' ? 'p-button-warning' : 'p-button-outlined'}
+          size="small"
+          style={selectedTimeFrame === '3y' ?
+            { backgroundColor: '#ff8c00', border: 'none' } :
+            { borderColor: '#404040', color: '#ffffff', backgroundColor: 'transparent' }
+          }
+        />
+        <Button
+          label="Custom"
+          onClick={() => handleTimeFrameChange('custom')}
+          className={selectedTimeFrame === 'custom' ? 'p-button-warning' : 'p-button-outlined'}
+          size="small"
+          style={selectedTimeFrame === 'custom' ?
+            { backgroundColor: '#ff8c00', border: 'none' } :
+            { borderColor: '#404040', color: '#ffffff', backgroundColor: 'transparent' }
+          }
+        />
+
+        {/* Data Points Info */}
+        <div style={{
+          marginLeft: 'auto',
+          color: '#888888',
+          fontSize: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span>Showing {filteredData.length} data points</span>
+          {selectedTimeFrame === 'custom' && customStartDate && customEndDate && (
+            <span>
+              ({customStartDate.toLocaleDateString()} - {customEndDate.toLocaleDateString()})
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Custom Date Range Selector */}
+      {showCustomRange && (
+        <div style={{
+          backgroundColor: '#2a2a2a',
+          border: '1px solid #404040',
+          borderRadius: '8px',
+          padding: '20px',
+          marginBottom: '20px'
+        }}>
+          <h4 style={{ color: '#ffffff', margin: '0 0 15px 0' }}>Custom Date Range</h4>
+          <div style={{ display: 'flex', gap: '15px', alignItems: 'end', flexWrap: 'wrap' }}>
+            <div>
+              <label style={{ color: '#888888', fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                Start Date
+              </label>
+              <Calendar
+                value={customStartDate}
+                onChange={(e) => {
+                  setCustomStartDate(e.value as Date);
+                  setCustomError(null);
+                }}
+                showIcon
+                dateFormat="yy-mm-dd"
+                placeholder="Select start date"
+                style={{ backgroundColor: '#1a1a1a' }}
+              />
+            </div>
+            <div>
+              <label style={{ color: '#888888', fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                End Date
+              </label>
+              <Calendar
+                value={customEndDate}
+                onChange={(e) => {
+                  setCustomEndDate(e.value as Date);
+                  setCustomError(null);
+                }}
+                showIcon
+                dateFormat="yy-mm-dd"
+                placeholder="Select end date"
+                style={{ backgroundColor: '#1a1a1a' }}
+              />
+            </div>
+            <Button
+              label="Apply Range"
+              onClick={handleCustomDateRangeApply}
+              className="p-button-warning"
+              style={{ backgroundColor: '#ff8c00', border: 'none' }}
+              disabled={!customStartDate || !customEndDate}
+            />
+          </div>
+          {customError && (
+            <Message
+              severity="error"
+              text={customError}
+              style={{ marginTop: '10px', backgroundColor: '#2a2a2a' }}
+            />
+          )}
+        </div>
       )}
 
-      {loading ? (
-        <LoadingSpinner />
-      ) : error ? (
-        renderErrorMessage()
-      ) : (
+      {/* Chart */}
+      <div style={{ height: '350px', width: '100%' }}>
         <ReactECharts
           option={getOption()}
-          style={{ height: '600px' }}
+          style={{ height: '100%', width: '100%' }}
           opts={{ renderer: 'canvas' }}
           notMerge={true}
           lazyUpdate={true}
         />
-      )}
-      <Disclaimer>
-        * This is a prediction model and should not be used as financial advice.
-      </Disclaimer>
-    </ChartContainer>
+      </div>
+
+      {/* Chart Info */}
+      <div style={{
+        marginTop: '10px',
+        color: '#888888',
+        fontSize: '11px',
+        textAlign: 'center'
+      }}>
+        * This chart shows Bitcoin price predictions and should not be used as financial advice.
+      </div>
+    </div>
   );
 };
 
