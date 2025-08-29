@@ -3,6 +3,7 @@ import { Card } from 'primereact/card';
 import { Badge } from 'primereact/badge';
 import { Button } from 'primereact/button';
 import { Skeleton } from 'primereact/skeleton';
+import { Tooltip } from 'primereact/tooltip';
 import { useNavigate } from 'react-router-dom';
 import { ModelPerformanceService, ModelPerformanceSummary } from '../services/modelPerformanceService';
 
@@ -62,6 +63,37 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
 
   const formatCurrency = (value: number): string => {
     return `$${value.toLocaleString()}`;
+  };
+
+  // Tooltip content for metrics
+  const getMetricTooltip = (metric: string): string => {
+    switch (metric) {
+      case 'accuracy':
+        return 'Overall prediction accuracy percentage. Higher is better.';
+      case 'reliability':
+        return 'Model confidence level based on recent performance. HIGH/MEDIUM/LOW rating.';
+      case 'rmse':
+        return 'Measures prediction accuracy - lower values mean better predictions. Shows average prediction error in dollars.';
+      case 'mae':
+        return 'Average difference between predicted and actual prices. Lower is better. Easy to interpret in dollar terms.';
+      case 'r2':
+        return 'Shows how well the model explains price movements (0-100%). Higher percentages mean better predictions.';
+      case 'mape':
+        return 'Average prediction error as a percentage. Lower percentages indicate more accurate predictions.';
+      default:
+        return 'Model performance metric';
+    }
+  };
+
+  const tooltipStyle = {
+    backgroundColor: 'rgba(42, 42, 42, 0.95)',
+    color: '#ffffff',
+    border: '1px solid #404040',
+    borderRadius: '6px',
+    fontSize: '0.875rem',
+    maxWidth: '300px',
+    padding: '8px 12px',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
   };
 
   if (loading) {
@@ -148,12 +180,34 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
             <div className="text-white font-semibold text-xl">
               {formatPercentage(summary.accuracy)}
             </div>
-            <small className="text-500">Model Accuracy</small>
+            <small className="text-500 accuracy-tooltip">
+              Model Accuracy
+              <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
+            </small>
+            <Tooltip
+              target=".accuracy-tooltip"
+              content={getMetricTooltip('accuracy')}
+              position="top"
+              showDelay={300}
+              hideDelay={100}
+              style={tooltipStyle}
+            />
           </div>
           <div className="text-right">
             {getReliabilityBadge(summary.reliability)}
             <div className="mt-1">
-              <small className="text-500">Reliability</small>
+              <small className="text-500 reliability-tooltip">
+                Reliability
+                <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
+              </small>
+              <Tooltip
+                target=".reliability-tooltip"
+                content={getMetricTooltip('reliability')}
+                position="top"
+                showDelay={300}
+                hideDelay={100}
+                style={tooltipStyle}
+              />
             </div>
           </div>
         </div>
@@ -164,7 +218,18 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
               <div className="text-blue-400 font-semibold">
                 {summary.keyMetrics.r2Score.toFixed(3)}
               </div>
-              <small className="text-500">R² Score</small>
+              <small className="text-500 r2-tooltip">
+                R² Score
+                <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
+              </small>
+              <Tooltip
+                target=".r2-tooltip"
+                content={getMetricTooltip('r2')}
+                position="top"
+                showDelay={300}
+                hideDelay={100}
+                style={tooltipStyle}
+              />
             </div>
           </div>
           <div className="col-6">
@@ -172,7 +237,18 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
               <div className="text-orange-400 font-semibold">
                 {formatCurrency(summary.keyMetrics.rmse)}
               </div>
-              <small className="text-500">RMSE</small>
+              <small className="text-500 rmse-tooltip">
+                RMSE
+                <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
+              </small>
+              <Tooltip
+                target=".rmse-tooltip"
+                content={getMetricTooltip('rmse')}
+                position="top"
+                showDelay={300}
+                hideDelay={100}
+                style={tooltipStyle}
+              />
             </div>
           </div>
         </div>
@@ -219,8 +295,30 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
       {/* Performance Indicators */}
       <div className="mt-2">
         <div className="flex align-items-center justify-content-between">
-          <small className="text-500">MAE: {formatCurrency(summary.keyMetrics.mae)}</small>
-          <small className="text-500">MAPE: {formatPercentage(summary.keyMetrics.mape)}</small>
+          <small className="text-500 mae-tooltip">
+            MAE: {formatCurrency(summary.keyMetrics.mae)}
+            <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
+          </small>
+          <small className="text-500 mape-tooltip">
+            MAPE: {formatPercentage(summary.keyMetrics.mape)}
+            <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
+          </small>
+          <Tooltip
+            target=".mae-tooltip"
+            content={getMetricTooltip('mae')}
+            position="top"
+            showDelay={300}
+            hideDelay={100}
+            style={tooltipStyle}
+          />
+          <Tooltip
+            target=".mape-tooltip"
+            content={getMetricTooltip('mape')}
+            position="top"
+            showDelay={300}
+            hideDelay={100}
+            style={tooltipStyle}
+          />
         </div>
       </div>
 

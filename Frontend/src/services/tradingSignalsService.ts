@@ -139,24 +139,45 @@ export class TradingSignalsService {
    */
   private static generateMomentumSignal(predictions: PredictionData[], indicators: any): TradingSignal | null {
     const currentPrice = predictions[0].price;
-    const { momentum, volatility } = indicators;
-    
+    const { momentum, volatility, support, resistance } = indicators;
+
     let signalType: SignalType;
     let confidence: ConfidenceLevel;
     let reasoning: string;
+    let targetPrice: number | undefined;
+    let stopLoss: number | undefined;
 
     if (momentum > 70) {
       signalType = 'SELL';
       confidence = volatility === 'HIGH' ? 'MEDIUM' : 'HIGH';
       reasoning = `Overbought conditions detected. Momentum indicator: ${momentum.toFixed(1)}. Consider taking profits.`;
+
+      // Short-term sell targets - more conservative for quick trades
+      if (resistance && resistance > currentPrice) {
+        targetPrice = currentPrice * 0.97; // 3% down target for short-term
+      } else {
+        targetPrice = currentPrice * 0.95; // 5% down target if no resistance data
+      }
+      stopLoss = currentPrice * 1.02; // 2% stop loss above current price
+
     } else if (momentum < 30) {
       signalType = 'BUY';
       confidence = volatility === 'HIGH' ? 'MEDIUM' : 'HIGH';
       reasoning = `Oversold conditions detected. Momentum indicator: ${momentum.toFixed(1)}. Potential buying opportunity.`;
+
+      // Short-term buy targets - more conservative for quick trades
+      if (support && support < currentPrice) {
+        targetPrice = currentPrice * 1.03; // 3% up target for short-term
+      } else {
+        targetPrice = currentPrice * 1.05; // 5% up target if no support data
+      }
+      stopLoss = currentPrice * 0.98; // 2% stop loss below current price
+
     } else {
       signalType = 'HOLD';
       confidence = 'LOW';
       reasoning = `Neutral momentum. Momentum indicator: ${momentum.toFixed(1)}. Wait for clearer signals.`;
+      // No target price or stop loss for HOLD signals
     }
 
     return {
@@ -165,6 +186,8 @@ export class TradingSignalsService {
       confidence,
       timeHorizon: 'SHORT_TERM',
       currentPrice,
+      targetPrice,
+      stopLoss,
       reasoning,
       technicalIndicators: {
         trend: indicators.trend,

@@ -6,6 +6,7 @@ import { Skeleton } from 'primereact/skeleton';
 import { Message } from 'primereact/message';
 import { Divider } from 'primereact/divider';
 import { ToggleButton } from 'primereact/togglebutton';
+import { Tooltip } from 'primereact/tooltip';
 import { useTradingSignals } from '../hooks/useTradingSignals';
 import { SignalType, ConfidenceLevel, TimeHorizon } from '../types';
 
@@ -62,9 +63,51 @@ const TradingSignals: React.FC = () => {
     return <Badge value={confidence} severity={severity} />;
   };
 
-  const getTimeHorizonBadge = (timeHorizon: TimeHorizon) => {
+  const getTimeHorizonTooltip = (timeHorizon: TimeHorizon): string => {
+    switch (timeHorizon) {
+      case 'SHORT_TERM':
+        return 'Minutes to days (typically 1 minute to 1 week) - Quick trades with tight stops';
+      case 'MEDIUM_TERM':
+        return 'Days to months (typically 1 week to 6 months) - Swing trading approach';
+      case 'LONG_TERM':
+        return 'Months to years (typically 6 months to several years) - Position trading strategy';
+      default:
+        return 'Trading time horizon information';
+    }
+  };
+
+  const getTimeHorizonBadge = (timeHorizon: TimeHorizon, signalId: string) => {
     const label = timeHorizon.replace('_', ' ');
-    return <Badge value={label} severity="secondary" />;
+    const tooltipId = `time-horizon-${signalId}`;
+
+    return (
+      <>
+        <Badge
+          value={label}
+          severity="secondary"
+          data-pr-tooltip={getTimeHorizonTooltip(timeHorizon)}
+          data-pr-position="top"
+          data-pr-at="center top-8"
+          className={tooltipId}
+        />
+        <Tooltip
+          target={`.${tooltipId}`}
+          position="top"
+          showDelay={300}
+          hideDelay={100}
+          style={{
+            backgroundColor: 'rgba(42, 42, 42, 0.95)',
+            color: '#ffffff',
+            border: '1px solid #404040',
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            maxWidth: '300px',
+            padding: '8px 12px',
+            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
+          }}
+        />
+      </>
+    );
   };
 
   const formatPrice = (price: number): string => {
@@ -217,7 +260,7 @@ const TradingSignals: React.FC = () => {
                     <h4 className="m-0 text-white">{signal.type} Signal</h4>
                     <div className="flex gap-2 mt-1">
                       {getConfidenceBadge(signal.confidence)}
-                      {getTimeHorizonBadge(signal.timeHorizon)}
+                      {getTimeHorizonBadge(signal.timeHorizon, signal.id)}
                     </div>
                   </div>
                 </div>

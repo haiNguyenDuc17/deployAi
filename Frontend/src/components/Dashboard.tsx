@@ -8,6 +8,7 @@ import { Badge } from 'primereact/badge';
 import { Skeleton } from 'primereact/skeleton';
 import { fetchAllCryptoPrices, CryptoPriceInfo } from '../api/csvDataService';
 import BitcoinPriceChart from './BitcoinPriceChart';
+import InvestmentAnalysis from './InvestmentAnalysis';
 
 
 interface DashboardProps {}
@@ -131,30 +132,26 @@ const Dashboard: React.FC<DashboardProps> = () => {
         ))}
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid">
-        {/* Chart */}
-        <div className="col-12 lg:col-8">
-          <Card
-            className="mb-4"
-            style={{
-              backgroundColor: '#2a2a2a',
-              border: '1px solid #404040',
-              borderRadius: '12px'
-            }}
-          >
-            <div className="flex justify-content-between align-items-center mb-3">
-              <div>
-                <h3 className="m-0 text-white">BTC Prediction</h3>
-                <p className="text-500 m-0"></p>
-              </div>
-            </div>
-            <BitcoinPriceChart />
-          </Card>
+      {/* BTC Prediction Chart - Full Width */}
+      <Card
+        className="mb-4"
+        style={{
+          backgroundColor: '#2a2a2a',
+          border: '1px solid #404040',
+          borderRadius: '12px'
+        }}
+      >
+        <div className="flex justify-content-between align-items-center mb-3">
+          <div>
+            <h3 className="m-0 text-white">BTC Prediction</h3>
+            <p className="text-500 m-0"></p>
+          </div>
         </div>
+        <BitcoinPriceChart />
+      </Card>
 
-
-      </div>
+      {/* Investment Analysis */}
+      <InvestmentAnalysis className="mb-4" />
 
       {/* Recent Prices Table */}
       <Card 
