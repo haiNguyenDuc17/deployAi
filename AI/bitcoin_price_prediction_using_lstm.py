@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import joblib
 import csv
 import shutil
+import json
 
 # For evaluation and preprocessing
 from sklearn.metrics import mean_squared_error, mean_absolute_error, mean_absolute_percentage_error
@@ -110,6 +111,50 @@ def evaluate_model(model, X, y, scaler, name=""):
     print(f"MAE: {mae:.2f}")
 
     return rmse, mae
+
+def export_model_performance_metrics(metrics_data, output_path):
+    """
+    Export model performance metrics to JSON file for frontend consumption
+
+    Args:
+        metrics_data: Dictionary containing all performance metrics
+        output_path: Path where to save the JSON file
+    """
+    try:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # Convert numpy types to Python native types for JSON serialization
+        def convert_numpy_types(obj):
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {key: convert_numpy_types(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_numpy_types(item) for item in obj]
+            return obj
+
+        # Convert all numpy types in metrics_data
+        serializable_metrics = convert_numpy_types(metrics_data)
+
+        # Add metadata
+        serializable_metrics['export_timestamp'] = dt.datetime.now().isoformat()
+        serializable_metrics['model_version'] = 'Advanced_Multivariate_LSTM_v1.0'
+
+        # Write to JSON file
+        with open(output_path, 'w') as f:
+            json.dump(serializable_metrics, f, indent=2)
+
+        print(f"✓ Model performance metrics exported to: {output_path}")
+        return True
+
+    except Exception as e:
+        print(f"❌ Failed to export model performance metrics: {str(e)}")
+        return False
 
 def create_multivariate_sequences(price_data, volume_data, window_size):
     """Create sequences with both price and volume features"""
@@ -541,6 +586,52 @@ def train_and_save_model():
     final_y_test = y_test_full
     final_pred = final_pred
 
+    # Collect comprehensive performance metrics for export
+    performance_metrics = {
+        'validation_metrics': {
+            'rmse_scaled': float(val_rmse),
+            'mae_scaled': float(val_mae),
+            'rmse_original': float(val_rmse_original),
+            'mae_original': float(val_mae_original),
+            'data_period': '3_years_validation'
+        },
+        'final_model_metrics': {
+            'rmse_scaled': float(final_rmse),
+            'mae_scaled': float(final_mae),
+            'rmse_original': float(final_rmse_original),
+            'mae_original': float(final_mae_original),
+            'data_period': 'complete_dataset'
+        },
+        'training_history': {
+            'validation_loss': history.history['loss'],
+            'validation_val_loss': history.history['val_loss'],
+            'epochs_trained': len(history.history['loss']),
+            'final_loss': float(history.history['loss'][-1]),
+            'final_val_loss': float(history.history['val_loss'][-1]),
+            'best_loss': float(min(history.history['loss'])),
+            'best_val_loss': float(min(history.history['val_loss']))
+        },
+        'model_architecture': {
+            'window_size': window_size,
+            'features': ['price', 'volume'],
+            'lstm_layers': 3,
+            'lstm_units': 64,
+            'dropout_rate': 0.2,
+            'optimizer': 'Nadam',
+            'loss_function': 'mean_squared_error'
+        },
+        'dataset_info': {
+            'total_samples': len(closedf),
+            'training_samples': len(X_train_full),
+            'test_samples': len(X_test_full),
+            'train_test_split': '80/20',
+            'date_range': {
+                'start_date': dates.iloc[0].strftime('%Y-%m-%d'),
+                'end_date': dates.iloc[-1].strftime('%Y-%m-%d')
+            }
+        }
+    }
+
     # Save the model and scalers
     model_dir = 'AI/model'
     if not os.path.exists(model_dir):
@@ -581,6 +672,27 @@ def train_and_save_model():
     y_pred = final_pred
 
     MAPE = mean_absolute_percentage_error(final_y_test, y_pred)
+
+    # Calculate R-squared for both scaled and original values
+    from sklearn.metrics import r2_score
+    r2_scaled = r2_score(final_y_test, y_pred)
+
+    # Calculate R-squared for original scale values
+    y_test_original_r2 = price_scaler.inverse_transform(final_y_test.reshape(-1,1)).flatten()
+    y_pred_original_r2 = price_scaler.inverse_transform(y_pred.reshape(-1,1)).flatten()
+    r2_original = r2_score(y_test_original_r2, y_pred_original_r2)
+
+    # Add additional metrics to performance_metrics
+    performance_metrics['final_model_metrics'].update({
+        'mape': float(MAPE * 100),  # Convert to percentage
+        'r2_scaled': float(r2_scaled),
+        'r2_original': float(r2_original),
+        'test_loss': float(test_loss)
+    })
+
+    # Calculate accuracy as percentage (100 - MAPE)
+    accuracy_percentage = max(0, 100 - (MAPE * 100))
+    performance_metrics['final_model_metrics']['accuracy_percentage'] = float(accuracy_percentage)
     Accuracy = 1 - MAPE
 
     print(f"\n=== Final Model Performance Summary ===")
@@ -673,6 +785,24 @@ def train_and_save_model():
     print(f"- Model analysis: {os.path.join(model_dir, 'advanced_lstm_analysis.png')}")
     print(f"- Price-volume analysis: {os.path.join(model_dir, 'price_volume_analysis.png')}")
 
+    # Export performance metrics to JSON files
+    print(f"\n=== Exporting Model Performance Metrics ===")
+
+    # Export to AI/model directory
+    ai_metrics_path = os.path.join(model_dir, 'model_performance_metrics.json')
+    export_model_performance_metrics(performance_metrics, ai_metrics_path)
+
+    # Also export to Frontend/public/Data for easy access by React app
+    frontend_data_dir = os.path.join('Frontend', 'public', 'Data')
+    frontend_metrics_path = os.path.join(frontend_data_dir, 'model_performance_metrics.json')
+
+    try:
+        export_model_performance_metrics(performance_metrics, frontend_metrics_path)
+        print(f"✓ Performance metrics also copied to frontend: {frontend_metrics_path}")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not copy metrics to frontend directory: {str(e)}")
+        print("You can manually copy the file from AI/model/ to Frontend/public/Data/")
+
     return model, price_scaler, volume_scaler, window_size, closedf, dates
 
 def print_model_summary():
@@ -724,6 +854,8 @@ if __name__ == "__main__":
     print("- Advanced LSTM model: AI/model/bitcoin_advanced_multivariate_lstm.keras")
     print("- Price scaler: AI/model/bitcoin_price_scaler.save")
     print("- Volume scaler: AI/model/bitcoin_volume_scaler.save")
+    print("- Performance metrics: AI/model/model_performance_metrics.json")
+    print("- Performance metrics (Frontend): Frontend/public/Data/model_performance_metrics.json")
     print("- Training loss curves: AI/model/training_loss_curves.png")
     print("- Model analysis: AI/model/advanced_lstm_analysis.png")
     print("- Price-volume analysis: AI/model/price_volume_analysis.png")

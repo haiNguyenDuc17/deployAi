@@ -53,6 +53,36 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
 
         <div className="mb-4">
           <Button
+            icon="pi pi-cog"
+            label={collapsed ? "" : "Model Performance"}
+            className={`w-full ${collapsed ? 'justify-content-center' : 'justify-content-start'} p-button-text text-white`}
+            style={{
+              backgroundColor: location.pathname === '/model-performance' ? '#ff8c00' : 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '12px 16px'
+            }}
+            onClick={() => navigate('/model-performance')}
+          />
+        </div>
+
+        <div className="mb-4">
+          <Button
+            icon="pi pi-chart-line"
+            label={collapsed ? "" : "Trading Signals"}
+            className={`w-full ${collapsed ? 'justify-content-center' : 'justify-content-start'} p-button-text text-white`}
+            style={{
+              backgroundColor: location.pathname === '/trading-signals' ? '#ff8c00' : 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '12px 16px'
+            }}
+            onClick={() => navigate('/trading-signals')}
+          />
+        </div>
+
+        <div className="mb-4">
+          <Button
             icon="pi pi-user"
             label={collapsed ? "" : "User"}
             className={`w-full ${collapsed ? 'justify-content-center' : 'justify-content-start'} p-button-text`}

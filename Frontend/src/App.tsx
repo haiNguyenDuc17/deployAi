@@ -4,6 +4,8 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import Footer from './components/Footer';
 import Dashboard from './components/Dashboard';
+import TradingSignals from './components/TradingSignals';
+import ModelPerformancePage from './pages/ModelPerformance';
 import About from './pages/About';
 
 
@@ -30,6 +32,8 @@ const App: React.FC = () => {
         >
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/model-performance" element={<ModelPerformancePage />} />
+            <Route path="/trading-signals" element={<TradingSignals />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </div>

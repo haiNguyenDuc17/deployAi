@@ -134,11 +134,11 @@ const Dashboard: React.FC<DashboardProps> = () => {
       {/* Main Content Grid */}
       <div className="grid">
         {/* Chart */}
-        <div className="col-12">
-          <Card 
+        <div className="col-12 lg:col-8">
+          <Card
             className="mb-4"
-            style={{ 
-              backgroundColor: '#2a2a2a', 
+            style={{
+              backgroundColor: '#2a2a2a',
               border: '1px solid #404040',
               borderRadius: '12px'
             }}
