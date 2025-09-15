@@ -68,8 +68,6 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
   // Tooltip content for metrics
   const getMetricTooltip = (metric: string): string => {
     switch (metric) {
-      case 'accuracy':
-        return 'Overall prediction accuracy percentage. Higher is better.';
       case 'reliability':
         return 'Model confidence level based on recent performance. HIGH/MEDIUM/LOW rating.';
       case 'rmse':
@@ -162,7 +160,6 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
           className="p-button-text p-button-sm"
           style={{ color: '#ff8c00' }}
           onClick={() => navigate('/model-performance')}
-          tooltip="View detailed metrics"
         />
       </div>
 
@@ -177,21 +174,8 @@ const ModelPerformanceWidget: React.FC<ModelPerformanceWidgetProps> = ({ classNa
       >
         <div className="flex justify-content-between align-items-center mb-2">
           <div>
-            <div className="text-white font-semibold text-xl">
-              {formatPercentage(summary.accuracy)}
-            </div>
-            <small className="text-500 accuracy-tooltip">
-              Model Accuracy
-              <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
-            </small>
-            <Tooltip
-              target=".accuracy-tooltip"
-              content={getMetricTooltip('accuracy')}
-              position="top"
-              showDelay={300}
-              hideDelay={100}
-              style={tooltipStyle}
-            />
+            <h4 className="text-white m-0">Model Performance</h4>
+            <small className="text-500">Key metrics overview</small>
           </div>
           <div className="text-right">
             {getReliabilityBadge(summary.reliability)}

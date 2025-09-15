@@ -83,8 +83,6 @@ const ModelPerformance: React.FC<ModelPerformanceProps> = ({
   // Tooltip content for metrics
   const getMetricTooltip = (metric: string): string => {
     switch (metric) {
-      case 'accuracy':
-        return 'Overall prediction accuracy percentage. Higher is better.';
       case 'reliability':
         return 'Model confidence level based on recent performance. HIGH/MEDIUM/LOW rating.';
       case 'rmse':
@@ -266,33 +264,13 @@ const ModelPerformance: React.FC<ModelPerformanceProps> = ({
             className="p-button-text p-button-sm"
             style={{ color: '#ff8c00' }}
             onClick={loadModelPerformance}
-            tooltip="Refresh metrics"
           />
         </div>
       </div>
 
       {/* Key Metrics Summary */}
       <div className="grid mb-3">
-        <div className="col-6 md:col-3">
-          <div className="text-center p-2" style={{ backgroundColor: '#1a1a1a', borderRadius: '8px' }}>
-            <div className="text-green-400 font-semibold text-lg">
-              {formatPercentage(summary.accuracy)}
-            </div>
-            <small className="text-500 accuracy-main-tooltip">
-              Accuracy
-              <i className="pi pi-info-circle ml-1" style={{ fontSize: '0.75rem', color: '#6b7280' }}></i>
-            </small>
-            <Tooltip
-              target=".accuracy-main-tooltip"
-              content={getMetricTooltip('accuracy')}
-              position="top"
-              showDelay={300}
-              hideDelay={100}
-              style={tooltipStyle}
-            />
-          </div>
-        </div>
-        <div className="col-6 md:col-3">
+        <div className="col-12 md:col-4">
           <div className="text-center p-2" style={{ backgroundColor: '#1a1a1a', borderRadius: '8px' }}>
             <div className="text-blue-400 font-semibold text-lg">
               {summary.keyMetrics.r2Score.toFixed(3)}
@@ -311,7 +289,7 @@ const ModelPerformance: React.FC<ModelPerformanceProps> = ({
             />
           </div>
         </div>
-        <div className="col-6 md:col-3">
+        <div className="col-12 md:col-4">
           <div className="text-center p-2" style={{ backgroundColor: '#1a1a1a', borderRadius: '8px' }}>
             <div className="text-orange-400 font-semibold text-lg">
               {formatCurrency(summary.keyMetrics.rmse)}
@@ -330,7 +308,7 @@ const ModelPerformance: React.FC<ModelPerformanceProps> = ({
             />
           </div>
         </div>
-        <div className="col-6 md:col-3">
+        <div className="col-12 md:col-4">
           <div className="text-center p-2" style={{ backgroundColor: '#1a1a1a', borderRadius: '8px' }}>
             <div className="text-purple-400 font-semibold text-lg">
               {formatPercentage(summary.keyMetrics.mape)}
