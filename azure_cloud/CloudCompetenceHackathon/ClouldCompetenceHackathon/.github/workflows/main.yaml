@@ -1,0 +1,36 @@
+name: Deploy to Azure ACR
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS1 }}
+
+      - name: Build Docker image
+        run: |
+          docker build . -t myapp:latest
+
+      - name: Push Docker image to ACR
+        run: |
+          az acr login --name dtg4hcacr
+          docker tag myapp:latest dtg4hcacr.azurecr.io/myapp:latest
+          docker push dtg4hcacr.azurecr.io/myapp:latest
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: dtg4hc-poc-app
+          slot-name: production
+          images: dtg4hcacr.azurecr.io/myapp:latest
