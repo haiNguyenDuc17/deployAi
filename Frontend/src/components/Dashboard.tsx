@@ -9,30 +9,37 @@ import { Skeleton } from 'primereact/skeleton';
 import { fetchAllCryptoPrices, CryptoPriceInfo } from '../api/csvDataService';
 import BitcoinPriceChart from './BitcoinPriceChart';
 import InvestmentAnalysis from './InvestmentAnalysis';
+import { useBinanceMulti } from '../hooks/useLiveBinance';
+import { fetchMarketData } from "../api/cryptoApi"; // returns CoinGecko data mapped to CryptoPriceInfo[]
 
 
 interface DashboardProps {}
-
 const Dashboard: React.FC<DashboardProps> = () => {
   const [cryptoPrices, setCryptoPrices] = useState<CryptoPriceInfo[]>([]);
-
+  const [symbols, setSymbols] = useState<string[]>(["BTC","ETH","XRP"]); // default; will be replaced after fetch
+  const { prices: liveMap, connected } = useBinanceMulti(symbols, 300);  // debounce 300ms
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const prices = await fetchAllCryptoPrices();
-        setCryptoPrices(prices);
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
 
-    loadData();
-  }, []);
+  useEffect(() => {
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchMarketData(); // <- returns CryptoPriceInfo[]
+      setCryptoPrices(data);
+      // update symbols list from the data you show (BTC, ETH, XRP, etc.)
+      setSymbols(data.map((c) => c.symbol.toUpperCase()));
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadData();
+  // NO dependency on live prices; we only fetch once
+}, []);
+
 
   const formatPrice = (price: number) => {
     if (price >= 1000) {
@@ -43,9 +50,9 @@ const Dashboard: React.FC<DashboardProps> = () => {
 
 
 
-  const priceBodyTemplate = (rowData: CryptoPriceInfo) => {
-    return <span className="font-semibold">{formatPrice(rowData.price)}</span>;
-  };
+  const priceBodyTemplate = (row: CryptoPriceInfo) => (
+  <span className="font-semibold">{formatPrice(displayPrice(row))}</span>
+);
 
   const change24hBodyTemplate = (rowData: CryptoPriceInfo) => {
     const isPositive = rowData.changePercent24h >= 0;
@@ -79,7 +86,8 @@ const Dashboard: React.FC<DashboardProps> = () => {
     );
   };
 
-
+const displayPrice = (c: CryptoPriceInfo) =>
+  Number.isFinite(liveMap[c.symbol]) ? (liveMap[c.symbol] as number) : c.price;
 
   const volumeBodyTemplate = (rowData: CryptoPriceInfo) => {
     return <span>{rowData.volume}</span>;
@@ -119,10 +127,21 @@ const Dashboard: React.FC<DashboardProps> = () => {
               }}
             >
               <div className="flex align-items-center justify-content-center gap-2 mb-2">
-                <i className={`${crypto.icon} text-orange-500`} style={{ fontSize: '1.5rem' }}></i>
+                {crypto.icon ? (
+                  <img
+                    src={crypto.icon}
+                    alt={crypto.symbol}
+                    width={20}
+                    height={20}
+                    style={{ borderRadius: '50%' }}
+                    loading="lazy"
+                  />
+                ) : (
+                  <i className="pi pi-circle-fill" style={{ fontSize: '1.2rem' }} />
+                )}
                 <span className="text-lg font-semibold text-400">{crypto.symbol}/USDT</span>
               </div>
-              <div className="text-2xl font-bold mb-2">{formatPrice(crypto.price)}</div>
+              <div className="text-2xl font-bold mb-2">{formatPrice(displayPrice(crypto))}</div>
               <Badge
                 value={`${crypto.changePercent24h >= 0 ? '+' : ''}${crypto.changePercent24h.toFixed(2)}%`}
                 severity={crypto.changePercent24h >= 0 ? 'success' : 'danger'}

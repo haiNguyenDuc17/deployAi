@@ -81,19 +81,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
           />
         </div>
 
-        <div className="mb-4">
-          <Button
-            icon="pi pi-user"
-            label={collapsed ? "" : "User"}
-            className={`w-full ${collapsed ? 'justify-content-center' : 'justify-content-start'} p-button-text`}
-            style={{
-              color: '#ffffff',
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: '12px 16px'
-            }}
-          />
-        </div>
 
         <div className="mb-4">
           <Button
