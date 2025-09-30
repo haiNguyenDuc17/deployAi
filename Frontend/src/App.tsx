@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard';
 import TradingSignals from './components/TradingSignals';
 import ModelPerformancePage from './pages/ModelPerformance';
 import About from './pages/About';
+import { AiChat } from './components/AiChat/AiChat';
 
 
 const App: React.FC = () => {
@@ -34,6 +35,7 @@ const App: React.FC = () => {
             <Route path="/" element={<Dashboard />} />
             <Route path="/model-performance" element={<ModelPerformancePage />} />
             <Route path="/trading-signals" element={<TradingSignals />} />
+            <Route path="/ai-chat" element={<AiChat />} />
             <Route path="/about" element={<About />} />
           </Routes>
         </div>

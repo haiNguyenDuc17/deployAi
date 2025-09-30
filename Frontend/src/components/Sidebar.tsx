@@ -81,6 +81,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed }) => {
           />
         </div>
 
+        <div className="mb-4">
+          <Button
+            icon="pi pi-comments"
+            label={collapsed ? "" : "AI Chat"}
+            className={`w-full ${collapsed ? 'justify-content-center' : 'justify-content-start'} p-button-text text-white`}
+            style={{
+              backgroundColor: location.pathname === '/ai-chat' ? '#ff8c00' : 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '12px 16px'
+            }}
+            onClick={() => navigate('/ai-chat')}
+          />
+        </div>
+
 
         <div className="mb-4">
           <Button
